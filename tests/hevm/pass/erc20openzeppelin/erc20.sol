@@ -89,17 +89,17 @@ contract Token {
         return true;
     }
 
-    function mint(address account, uint256 value) public returns(bool) {
+    function mint(address account, uint256 value) public returns (bool) {
         _mint(account, value);
         return true;
     }
 
-    function burn(uint256 value) public returns(bool) {
+    function burn(uint256 value) public returns (bool) {
         _burn(msg.sender, value);
         return true;
     }
 
-    function burnFrom(address account, uint256 value) public returns(bool) {
+    function burnFrom(address account, uint256 value) public returns (bool) {
         if(account != msg.sender) {
             _spendAllowance(account, msg.sender, value);
         }
