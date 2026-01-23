@@ -274,11 +274,15 @@ signExtendArgConstraints :: Interface -> [EVM.Prop]
 signExtendArgConstraints (Interface _ args) = mapMaybe signExtendArgConstraint args
   where
   signExtendArgConstraint :: Arg -> Maybe EVM.Prop
+  signExtendArgConstraint (Arg (AbiArg AbiAddressType) _) = Nothing
+  signExtendArgConstraint (Arg (AbiArg AbiBoolType) x) =
+    pure $ EVM.POr (EVM.PEq (EVM.Var $ T.pack x) (EVM.Lit 0)) (EVM.PEq (EVM.Var $ T.pack x) (EVM.Lit 1))
   signExtendArgConstraint (Arg atyp x) =
     let (sgnExt, size) = (signExtendArgType atyp, sizeOfArgType atyp) in
     if sgnExt then
       pure $ EVM.PEq (EVM.Var $ T.pack x) (EVM.SEx (EVM.Lit (fromIntegral size - 1)) (EVM.Var $ T.pack x))
-    else Nothing
+    else
+      pure $ EVM.PEq (EVM.Var $ T.pack x) (EVM.And (EVM.Lit (2^(size*8) - 1)) (EVM.Var $ T.pack x))
 
 translateConstructor :: Monad m => BS.ByteString -> Constructor -> ContractMap -> ActT m ([(EVM.Expr EVM.End, ContractMap)], Calldata, Sig, [EVM.Prop])
 translateConstructor bytecode (Constructor cid iface _ preconds cases _ _) cmap = do
@@ -967,7 +971,7 @@ checkOp _ _ _ _ (IntEnv _ _) = pure $ EVM.Lit 1
 -- | Wrapper for the equivalenceCheck function of hevm
 checkEquiv :: App m => SolverGroup -> [EVM.Expr EVM.End] -> [EVM.Expr EVM.End] -> m [EquivResult]
 checkEquiv solvers l1 l2 = do
-  EqIssues res _ <- equivalenceCheck' solvers l1 l2 False
+  EqIssues res _ <- equivalenceCheck' solvers Nothing l1 l2 False
   pure $ fmap (toEquivRes . fst) res
   where
     toEquivRes :: EVM.EquivResult -> EquivResult
@@ -1070,6 +1074,11 @@ checkConstructors solvers initcode runtimecode (Contract ctor@(Constructor cname
     -- TODO check if contrainsts about preexistsing fresh symbolic addresses are necessary
   solbehvs <- lift $ removeFails <$> getInitcodeBranches solvers initcode hevminitmap calldata (checks' ++ bounds) fresh
 
+  traceM "Act"
+  traceM (showBehvs behvs') 
+  traceM "Solidity"
+  traceM (showBehvs solbehvs) 
+
 
   -- Check equivalence
   lift $ showMsg "\x1b[1mChecking if constructor results are equivalent.\x1b[m"
@@ -1097,11 +1106,11 @@ checkBehaviours solvers (Contract _ behvs) actstorage = do
     -- symbolically execute bytecode
     solbehvs <- lift $ removeFails <$> getRuntimeBranches solvers hevmstorage calldata (checks ++ bounds) fresh
     
-    -- when (name == "deposit") $ do
-    --     traceM "Act"
-    --     traceM (showBehvs behvs') 
-    --     traceM "Solidity"
-    --     traceM (showBehvs solbehvs) 
+    -- when (name == "set_flag") $ do
+    traceM "Act"
+    traceM (showBehvs behvs') 
+    traceM "Solidity"
+    traceM (showBehvs solbehvs) 
     
     lift $ showMsg $ "\x1b[1mChecking behavior \x1b[4m" <> name <> "\x1b[m of Act\x1b[m"
     -- equivalence check
@@ -1328,7 +1337,6 @@ checkAbi solver contract cmap = do
     checkBehv assertions (EVM.Success cnstr _ _ _) = assertions <> cnstr
     checkBehv _ (EVM.Failure _ _ _) = []
     checkBehv _ (EVM.Partial _ _ _) = []
-    checkBehv _ (EVM.ITE _ _ _) = error "Internal error: HEVM behaviours must be flattened"
     checkBehv _ (EVM.GVar _) = error "Internal error: unepected GVar"
 
     msg = "\x1b[1mThe following function selector results in behaviors not covered by the Act spec:\x1b[m"

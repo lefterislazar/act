@@ -25,6 +25,7 @@ import Data.List
 import qualified Data.Map as Map
 import Data.Map (Map)
 import Data.Maybe
+import qualified Data.Bifunctor as Bi
 import qualified Data.Text as Text
 import qualified Data.Text.IO as TIO
 import Prettyprinter hiding (annotate, line')
@@ -386,7 +387,12 @@ bytecodes :: FilePath -> LayoutMode -> IO (Map (Maybe Id) (BS.ByteString, BS.Byt
 bytecodes srcFile SolidityLayout = do
   src <- TIO.readFile srcFile
   json <- solc Solidity src False
-  let (Contracts sol', _, _) = fromJust $ readStdJSON json
+  sol' <- -- maybe (render (text "Solidity compilation error" <> line) >> exitFailure) pure (readStdJSON json)
+    case readStdJSON json of
+      Right (Contracts sol'') -> pure sol'' -- ure $ Map.lookup ("hevm.sol:" <> contract) sol <&> (.creationCode)
+      Left e -> error $ "unable to parse solidity output:\n" <> (Text.unpack json) <> "\n" <> show e
+
+
   pure $ Map.fromList $ map (\(fn,c) -> (Just $ Text.unpack $ snd $ Text.breakOnEnd ":" fn, (c.creationCode, c.runtimeCode))) $ Map.toList sol'
 bytecodes srcFile VyperLayout = Map.singleton Nothing <$> vyper srcFile
 
