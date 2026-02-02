@@ -56,22 +56,19 @@ An **act specification** describes the **externally observable behavior** of thi
 ## The Shape of an act Contract
 The translation of the code above into an act specification has the following top-level structure:
 
-*(snippet from [erc20.act](https://github.com/argotorg/act/blob/main/tests/hevm/pass/multisource/erc20/erc20.act), headers only)*
+*(snippet from [erc20.act](https://github.com/argotorg/act/blob/main/tests/hevm/pass/multisource/erc20/erc20.act), high-level structure only)*
 
 ```act,editable 
 contract Token:
 
 constructor(uint256 _totalSupply)
-iff true
-    ...
 creates
   uint256 totalSupply := _totalSupply
   mapping(address => uint) balanceOf :=  [CALLER => _totalSupply]
   mapping(address => mapping(address => uint)) allowance := []
 
 transition transfer(uint256 value, address to)
-iff true
-    ...
+iff  ...
 case CALLER != to:
   updates
     ...
@@ -80,8 +77,7 @@ case CALLER == to:
     ...
 
 transition transferFrom(address from, address to, uint256 value)
-iff true
-...
+iff ...
 ```
 
 Even without understanding the details, several aspects are already visible:
@@ -89,15 +85,15 @@ Even without understanding the details, several aspects are already visible:
 - Afterwards the constructor `contructor(<input_vars>)` follows.
 - Lastly all smart contract functions are listed as transitions `transition <fct_name>(<input_vars>)`
 - Within the constructor and the transitions:
-  - The list of preconditions (the `iff` block) comes first and lists the necessary and sufficient conditions on when this operation succeeds. If the `iff` block is not satisfied, the corresponding function in Solidity/Vyper would revert.
+  - The list of preconditions (the `iff` block) comes first and lists the necessary and sufficient conditions on when this operation succeeds. If the `iff` block is not satisfied, the corresponding function in Solidity/Vyper would revert. If there are no preconditions, the `iff` block is omitted.
   - In the constructor the `creates` block is next. It lists all the storage a contract has and initializes it. As expected, it mirrors the Solidity/Vyper code closely. The `creates` block is the last block of the constructor.
   - Similar to `creates` for constructors works the `updates` block for transitions. It updates all the changes to the storage. Thereby, summarizing the effects a transition has on the storage.
-  - If there are any branches in the underlying Solidity/Vyper code, then act distinguishes what happens to the storage relative to a `case`. In the ERC20 example, that happens in line 14 and line 17: depending on whether the function caller `CALLER` is the same address as the one where the money is supposed to be transfered to, `to`, the storage is updated differently.
+  - If there are any branches in the underlying Solidity/Vyper code, then act distinguishes what happens to the storage relative to a `case`. In the ERC20 example, that happens in line 11 and line 14: depending on whether the function caller `CALLER` is the same address as the one where the money is supposed to be transfered to, `to`, the storage is updated differently.
 - act is aware of some Ethereum environment variables such as the caller of a function `CALLER` or the amount that was "paid" to a contract upon a function call `CALLVALUE`.
 
 In the next sections, we will build up the meaning of these pieces by incrementally refining the ERC20 specification.
 
-Jump to [Running the ERC20 Example](./layout_tooling.md#running-the-erc20-example) if you want to try out running the ERC20 example with verification backends.
+Jump to [Running the ERC20 Example](./equiv.md#running-the-erc20-example) if you want to try out running the ERC20 example with the equivalence checking backend. To explore the Rocq extraction of the ERC20 example, go to [act Export](./rocq.md#act-export).
 
 <!-- - act specifications are declarative: they describe what must hold, not how to execute.
 - Each transition explicitly states when it is defined (iff ...).

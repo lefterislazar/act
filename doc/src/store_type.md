@@ -167,8 +167,8 @@ In a transfer transition of the ERC20 contract the storage is updated as:
 ```act
   updates
 
-    balanceOf := balanceOf[ CALLER => balanceOf[CALLER] - _value
-                          , to     => balanceOf[to] + _value]
+    balanceOf := balanceOf[ CALLER => balanceOf[CALLER] - _value,
+                            to     => balanceOf[to] + _value]
 
 ```
 
@@ -207,12 +207,12 @@ The preconditions in the transfer transition use references:
 
 ```act
 iff
-  inRange(uint256, balanceOf[CALLER] - value)
-  CALLER != to ==> inRange(uint256, balanceOf[to] + value)
+  inRange(uint256, balanceOf[CALLER] - _value)
+  CALLER != to ==> inRange(uint256, balanceOf[to] + _value)
 
 ```
 
-The precondition uses the mapping references `balanceOf[CALLER]` and `balanceOf[to]`, the parameter names `value`, and `to`, and the environment variable `CALLER`. The precondition ensures that the transfer does not cause an underflow or overflow in the balances.
+The precondition uses the mapping references `balanceOf[CALLER]` and `balanceOf[to]`, the parameter names `_value`, and `to`, and the environment variable `CALLER`. The precondition ensures that the transfer does not cause an underflow or overflow in the balances.
 
 ### Base Expressions
 
