@@ -46,7 +46,7 @@ The general shape of a constructor in act is:
 
 2. **Precondition Block**: `iff <condition>`
    - Specifies the necessary and sufficient condition for successful constructor execution.
-   - Must be present (use `iff true` if there are no preconditions).
+   - Can be omitted if there are no preconditions.
 
 3. **Cases Block** (optional):
    - If present, there are multiple `case <condition>: creates ...` branches whose conditions are mutually exclusive and exhaustive.
@@ -76,8 +76,6 @@ In the ERC20 example, the constructor is non-payable. Thus, it does not include 
 ```act
 constructor(uint256 _totalSupply)
 
-iff true
-
 creates
 
   uint256 totalSupply := _totalSupply
@@ -89,8 +87,6 @@ An artificial example of a *payable* constructor would be:
 
 ```act
 constructor () payable
-
-iff true
 
 case CALLVALUE > 0 :
 creates
@@ -152,7 +148,7 @@ def __init__(t0: address, t1: address):
 ```
 
 
-As mentioned before, the `iff` block cannot be skipped even if the condition is trivial, in which case the user should write `iff true` as shown in the ERC20 example.
+As mentioned before, the `iff` block can be skipped if the condition is trivial (i.e. `iff true`), as shown in the ERC20 example.
 
 ### `inRange` in Preconditions
 Whenever arithmetic operations are involved in the storage initialization, it is necessary to ensure that these operations do not overflow or underflow. This is done using the `inRange` expression ([Base Expressions](./store_type.md#base-expressions)), which checks whether a value fits within a specified type. In solidity these range checks are implicit, but in act they must be made explicit in the precondition block.
@@ -165,6 +161,7 @@ For example, consider a constructor that initializes a balance by subtracting a 
 constructor(uint256 initialAmount, uint256 deduction)
 iff
     inRange(uint256, initialAmount - deduction)
+    
 creates
     uint256 balance := initialAmount - deduction
 ```

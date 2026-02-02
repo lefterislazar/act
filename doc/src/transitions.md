@@ -93,7 +93,7 @@ The general shape of a transition that does **not return** a value in act is:
 
 2. **Precondition Block**: `iff <condition>`
    - Specifies the necessary and sufficient condition for successful execution.
-   - Must be present (use `iff true` if there are no preconditions).
+   - Can be omitted if there are no preconditions.
    - If the precondition fails, the transition reverts and makes no state changes.
 
 3. **Cases Block** (optional):
@@ -123,7 +123,7 @@ For example the `transfer` transition of the ERC20 contract is non-payable and s
 *(signature from [erc20.act](https://github.com/argotorg/act/blob/main/tests/hevm/pass/multisource/erc20/erc20.act))*
 
 ```act
-transition transfer(uint256 value, address to) : bool
+transition transfer(uint256 _value, address to) : bool
      ...
 ```
 
@@ -188,7 +188,7 @@ In the ERC20 `transfer` transition, we distinguish two cases based on whether th
 *(transfer transition from [erc20.act](https://github.com/argotorg/act/blob/main/tests/hevm/pass/multisource/erc20/erc20.act))*
 
 ```act
-transition transfer(uint256 value, address to) : bool
+transition transfer(uint256 _value, address to) : bool
 
 iff
    ...
@@ -198,8 +198,8 @@ case CALLER != to:
   updates
 
    balanceOf := balanceOf[
-                CALLER => balanceOf[CALLER] - value,
-                to     => balanceOf[to]     + value ]
+                CALLER => balanceOf[CALLER] - _value,
+                to     => balanceOf[to]     + _value ]
 
   returns true
 
@@ -224,17 +224,17 @@ case src != dst and CALLER != src and allowance[src][CALLER] < 2^256 - 1:
 
    updates
    balanceOf := balanceOf[
-                  from => balanceOf[from] - value,
-                  to   => balanceOf[to]   + value ]
+                  src => balanceOf[src] - amount,
+                  dst   => balanceOf[dst]   + amount ]
 
    allowance := allowance[
-                  from => allowance[from][
-                           CALLER => allowance[from][CALLER] - value ]]
+                  src => allowance[src][
+                           CALLER => allowance[src][CALLER] - amount ]]
 ```
 
 This does not mean adapt `balanceOf` first and `allowance` second.
 Instead, it means:
-“In the final state, the mapping `balanceOf` equals the old one except the fields `from` and `to` where updated, and `allowance` equals the old mapping except `from` now maps to a different mapping (the one from before except `CALLER` maps to `allowance[from][CALLER] - value`).”
+“In the final state, the mapping `balanceOf` equals the old one except the fields `from` and `to` where updated, and `allowance` equals the old mapping except `from` now maps to a different mapping (the one from before except `CALLER` maps to `allowance[from][CALLER] - _value`).”
 All right-hand sides are evaluated in the **initial state**.
 This design avoids accidental order-dependence and makes transitions suitable for formal reasoning.
 
@@ -267,6 +267,8 @@ transition set_admin2(address new_admin2)
 iff true
 updates
    admin2 := new_admin2
+
+...
 ```
  
  `Admins` is a simple contract that tracks two admin addresses. The first admin is set during construction, while the second admin is initialized to the transaction origin (`ORIGIN`). We assume that only admin2 can be externally updated via the `admin2` transition. (That means in the solidity equivalent, `admin1` would be immutable and `admin2` would have a setter function.)
@@ -278,13 +280,13 @@ contract Asset
 constructor(uint256 _value)
 iff true
 creates
-    uint256 value := _value
+    uint256 _value := _value
     Admins admins := new Admins(CALLER)
     mapping(address => uint256) balanceOf := [THIS => _value]
 
 
 
-transition assetTransfer(uint256 amt, address to) 
+transition assetTransfer(uint256 amt, address to) : bool
 
 iff CALLER == admins.admin1 or CALLER == admins.admin2
     inRange(uint256, balanceOf[THIS] - amt)
@@ -297,8 +299,11 @@ updates
                   THIS => balanceOf[THIS] - amt,
                   to   => balanceOf[to]   + amt ]
 
+returns true
+
 case THIS == to
 
+returns true
 
 
 transition setAdmins(address new_admin1, address new_admin2)
@@ -315,7 +320,9 @@ case not (CALLER == admins.admin1 or CALLER == admins.admin2)
 
 ...
 ```
-*(This example has been added to the benchmarks as [ordered_updates.act](https://github.com/argotorg/act/blob/main/tests/hevm/pass/ordered_updates/ordered_updates.act) and can be proven equivalent to the corresponding [ordered_updates.sol](https://github.com/argotorg/act/blob/main/tests/hevm/pass/ordered_updates/ordered_updates.sol) implementation. <span style=color:red> double check link </span>)*
+*(This example has been added to the benchmarks as [ordered_updates.act](https://github.com/argotorg/act/blob/main/tests/hevm/pass/ordered_updates/ordered_updates.act) and can be proven equivalent to the corresponding [ordered_updates.sol](https://github.com/argotorg/act/blob/main/tests/hevm/pass/ordered_updates/ordered_updates.sol) implementation.)*
+
+*(Note: the trivial precondition blocks (`iff true`) could be omitted for brevity.)*
 
 Let's consider now the `Asset` contract above. 
  - The contract `Asset` is a variation of a drastically simplified token contract (similar to ERC20). 

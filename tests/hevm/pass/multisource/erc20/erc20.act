@@ -61,7 +61,7 @@ case src != dst and CALLER != src and allowance[src][CALLER] < 2^256 - 1:
 
   updates
 
-    allowance := allowance[ src => [ CALLER => allowance[src][CALLER] - amount] ]
+    allowance := allowance[ src => allowance[src][ CALLER => allowance[src][CALLER] - amount] ]
     balanceOf := balanceOf[ src => balanceOf[src] - amount
                           , dst => balanceOf[dst] + amount]
 
@@ -71,7 +71,7 @@ case src == dst and CALLER != src and allowance[src][CALLER] < 2^256 - 1:
 
   updates
 
-    allowance := allowance[ src => [ CALLER => allowance[src][CALLER] - amount] ]
+    allowance := allowance[ src => allowance[src][ CALLER => allowance[src][CALLER] - amount] ]
 
   returns true
 
@@ -86,13 +86,12 @@ transition approve(address spender, uint amount) : bool
 iff
 
   inRange(uint256, amount)
-  CALLVALUE == 0
 
 case CALLER != spender:
 
   updates
 
-    allowance := allowance[ CALLER => [ spender => amount ] ]
+    allowance := allowance[ CALLER => allowance[CALLER][ spender => amount ] ]
 
   returns true
 
@@ -106,7 +105,6 @@ transition burn(uint256 amount) : bool
 
 iff
 
-  CALLVALUE == 0
   inRange(uint256, totalSupply - amount)
   inRange(uint256, balanceOf[CALLER] - amount)
 
@@ -124,7 +122,6 @@ iff
   amount <= totalSupply
   amount <= balanceOf[src]
   CALLER != src ==> amount <= allowance[src][CALLER]
-  CALLVALUE == 0
 
 case CALLER != src and allowance[src][CALLER] == 2^256 - 1:
 
@@ -140,7 +137,7 @@ case CALLER != src and allowance[src][CALLER] < 2^256 - 1:
   updates
 
     totalSupply := totalSupply - amount
-    allowance := allowance[ src => [ CALLER => allowance[src][CALLER] - amount] ]
+    allowance := allowance[ src => allowance[src][ CALLER => allowance[src][CALLER] - amount] ]
     balanceOf := balanceOf[ src => balanceOf[src] - amount ]
 
   returns true
@@ -162,7 +159,6 @@ ensures
 transition mint(address dst, uint256 amount) : bool
 
 iff
-  CALLVALUE == 0
   inRange(uint256, totalSupply + amount)
   inRange(uint256, balanceOf[dst] + amount)
 
@@ -178,27 +174,15 @@ returns true
 
 transition totalSupply() : uint256
 
-iff 
-
-  CALLVALUE == 0
-
 updates
 returns totalSupply
 
 transition balanceOf(address idx) : uint256
 
-iff 
-
-  CALLVALUE == 0
-
 updates
 returns balanceOf[idx]
 
 transition allowance(address idx1, address idx2) : uint256
-
-iff 
-
-  CALLVALUE == 0
 
 updates
 returns allowance[idx1][idx2]

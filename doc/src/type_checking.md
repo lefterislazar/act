@@ -33,21 +33,21 @@ When you write `inRange(uint256, expression)` in a precondition, the type-checke
 *(snippet from [erc20.act](https://github.com/argotorg/act/blob/main/tests/hevm/pass/multisource/erc20/erc20.act), transfer transition)*
 
 ```act
-transition transfer(address to, uint256 value)
+transition transfer(address to, uint256 _value)
 iff 
-  inRange(uint256, balanceOf[CALLER] - value)
-  CALLER != to ==> inRange(uint256, balanceOf[to] + value)
+  inRange(uint256, balanceOf[CALLER] - _value)
+  CALLER != to ==> inRange(uint256, balanceOf[to] + _value)
 
 case CALLER != to:
   updates
     balanceOf := balanceOf[
-                    CALLER => balanceOf[CALLER] - value,
-                    to => balanceOf[to] + value]
+                    CALLER => balanceOf[CALLER] - _value,
+                    to => balanceOf[to] + _value]
 ```
 
 The SMT solver verifies that given 
-- `inRange(uint256, balanceOf[CALLER] - value)` and 
-- `CALLER != to ==> inRange(uint256, balanceOf[to] + value)`
+- `inRange(uint256, balanceOf[CALLER] - _value)` and 
+- `CALLER != to ==> inRange(uint256, balanceOf[to] + _value)`
 
 No arithmetic overflow or underflow occurs in any (sub-)expression anywhere in this transition.
 
@@ -197,7 +197,7 @@ counterexample:
 ```
 
 
-** Subsequent Limitation: Expressing Overflow/Underflow in act**
+**Subsequent Limitation: Expressing Overflow/Underflow in act**
 
 To express overflow/underflow in act, the ideal way would be to use the mathematical formulation `(a+b)%max`. This works for all ranges, except the 256-bit one, where the additional overflow pass will catch `a+b`. There is currently no way to express 256-bit-overflow in act without triggering the overflow pass. We aim to cover this in future versions.
 
@@ -237,14 +237,14 @@ When `Amm`'s constructor is called, e.g., in another contract's constructor:
 ```act
 contract Wrapper
 constructor(address<Token> t0, address<Token> t1)
-iff true
+
 creates
     Amm amm := new Amm(t0, t1)
 ```
 
 For the constructor call `Amm(t0, t1)`, the SMT solver verifies that given the current information: 
 
-- preconditions: `true`,
+- preconditions: none,
 - case conditions: none 
 - information about the values `t0`, `t1`: they are of type `address<Token>`
 
@@ -285,16 +285,16 @@ We revisit the transfer transition of the ERC20 contract:
 *(snippet from [erc20.act](https://github.com/argotorg/act/blob/main/tests/hevm/pass/multisource/erc20/erc20.act), transfer transition)*
 
 ```act
-transition transfer(address to, uint256 value) : bool
+transition transfer(address to, uint256 _value) : bool
 iff
-    inRange(uint256, balanceOf[CALLER] - value)
-    CALLER != to ==> inRange(uint256, balanceOf[to] + value)
+    inRange(uint256, balanceOf[CALLER] - _value)
+    CALLER != to ==> inRange(uint256, balanceOf[to] + _value)
 
 case CALLER != to:
   storage
     balanceOf := balanceOf[
-                    CALLER => balanceOf[CALLER] - value,
-                     to    => balanceOf[to] + value ]
+                    CALLER => balanceOf[CALLER] - _value,
+                     to    => balanceOf[to] + _value ]
     returns true
 
 case CALLER == to:

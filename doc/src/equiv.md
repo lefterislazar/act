@@ -8,7 +8,7 @@
   - [Running the ERC20 Example](#running-the-erc20-example)
   - [Expected Output for Successful Verification](#expected-output-for-successful-verification)
   - [When Verification Fails: Example with Broken ERC20](#when-verification-fails-example-with-broken-erc20)
-  - [Verifying Multiple Contracts with --json](#verifying-multiple-contracts-with---json)
+  - [Verifying Multiple Contracts with --sources](#verifying-multiple-contracts-with---sources)
   - [Additional Options](#additional-options)
 - [How it works](#how-it-works)
   - [Success nodes](#success-nodes)
@@ -43,7 +43,7 @@ act equiv --spec <PATH_TO_SPEC> --sol <PATH_TO_SOL>
 act equiv --spec <PATH_TO_SPEC> --vy <PATH_TO_VY>
 ```
 
-**3. Multi-contract projects:** (more info in [Multi-Contract Projects](#verifying-multiple-contracts-with---json))
+**3. Multi-contract projects:** (more info in [Multi-Contract Projects](#verifying-multiple-contracts-with---sources))
 ```sh
 act equiv --json <PATH_TO_CONFIG_JSON>
 ```
