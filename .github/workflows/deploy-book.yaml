@@ -1,8 +1,6 @@
 name: Deploy Book
 on:
-  push:
-    branches:
-      - master
+  workflow_dispatch:  # Enables manual triggering from GitHub UI only
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
