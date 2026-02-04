@@ -7,35 +7,35 @@ Constructors in act specify the initial state of contract storage and the condit
 The general shape of a constructor in act is:
 
 ```
-┌──────────────────────────────────────────────────────────────┐
-│         constructor (<parameters>) ?payable                  │
-└─────────────────────────┬────────────────────────────────────┘
-                          │
-                          ▼
-                  ┌───────────────--┐
-                  │ iff <condition> │
-                  └────────┬────────┘
-                           │
-              ┌────────────┴────────────┐
-              │                         │
-              ▼                         ▼
-      No branching                Branching (cases)
-              │                         │
-              ▼                         ▼
-    ┌──────────────────────┐  ┌──────────────────────────┐
-    │ creates              │  │ case <condition>:        │
-    │   <storage_init>     │  │   creates <storage_init> │
-    └──────────────────────┘  └──────────┬───────────────┘
-                                         │
-                                         ▼
-                                        ...
-                                        
-                                         │
-                                         ▼
-                              ┌──────────────────────────┐
-                              │ case <condition>:        │
-                              │   creates <storage_init> │
-                              └──────────────────────────┘
+            ┌────────────────────────────────────────────────────────────┐
+            │         constructor (<parameters>) ?payable                │
+            └─────────────────────────────┬──────────────────────────────┘
+                                          │
+                                          ▼
+                                 ┌─────────────────┐
+                                 │ iff <condition> │
+                                 └────────┬────────┘
+                                          │
+                             ┌────────────┴─────────────┐
+                             │                          │
+                             ▼                          ▼
+                        No branching              Branching (cases)
+                             │                          │
+                             ▼                          ▼
+                ┌──────────────────────┐    ┌──────────────────────────┐
+                │ creates              │    │ case <condition>:        │
+                │   <storage_init>     │    │   creates <storage_init> │
+                └──────────────────────┘    └───────────┬──────────────┘
+                                                        │
+                                                        ▼
+                                                       ...
+                                                         
+                                                        │
+                                                        ▼
+                                            ┌──────────────────────────┐
+                                            │ case <condition>:        │
+                                            │   creates <storage_init> │
+                                            └──────────────────────────┘
 ```
 
 **Components:**
@@ -71,7 +71,7 @@ Similarly, if a constructor is marked `payable`, the user has to declare and ini
 In the ERC20 example, the constructor is non-payable. Thus, it does not include the `payable` keyword nor the `BALANCE` variable:
 
 
-*(constructor from [erc20.act](https://github.com/argotorg/act/blob/main/tests/hevm/pass/multisource/erc20/erc20.act))*
+*(constructor from [erc20.act](https://github.com/argotorg/act/blob/v0.2.0_documentation/tests/hevm/pass/multisource/erc20/erc20.act))*
 
 ```act
 constructor(uint256 _totalSupply)
@@ -107,7 +107,7 @@ Additionally to `BALANCE`, there are 4 such special variables (called environmen
 ## Constructor Preconditions
 Consider the following constructor from an automated market maker (AMM) contract:
 
-*(constructor from [amm.act](https://github.com/argotorg/act/blob/main/tests/hevm/pass/multisource/amm/amm.act))*
+*(constructor from [amm.act](https://github.com/argotorg/act/blob/v0.2.0_documentation/tests/hevm/pass/multisource/amm/amm.act))*
 
 ```act
 constructor(address<Token> t0, address<Token> t1)
@@ -127,7 +127,7 @@ In this example, the precondition `address(t0) != address(t1)` ensures that the 
 
 The precondition block extends the `require`/`assert` statements commonly used in Solidity/Vyper constructors by explicitly listing requirements that are implicit in the code. In the above case the `iff` block is the same as the `require`/`assert` statement in Solidity/Vyper: 
 
-*(constructor from [amm.sol](https://github.com/argotorg/act/blob/main/tests/hevm/pass/multisource/amm/amm.sol))*
+*(constructor from [amm.sol](https://github.com/argotorg/act/blob/v0.2.0_documentation/tests/hevm/pass/multisource/amm/amm.sol))*
 
 ```solidity
  constructor(address t0, address t1) {
@@ -137,7 +137,7 @@ The precondition block extends the `require`/`assert` statements commonly used i
     }
 ```
 
-*(constructor from [amm.vy](https://github.com/argotorg/act/blob/main/tests/hevm/pass/multisource/amm/amm.vy))*
+*(constructor from [amm.vy](https://github.com/argotorg/act/blob/v0.2.0_documentation/tests/hevm/pass/multisource/amm/amm.vy))*
 
 ```vyper
 @deploy
@@ -174,7 +174,7 @@ The storage is created in the `creates` block, where each storage variable is in
 
 We revisit the storage initialization of the ERC20 constructor:
 
-*(snippet from [erc20.act](https://github.com/argotorg/act/blob/main/tests/hevm/pass/multisource/erc20/erc20.act) constructor)*
+*(snippet from [erc20.act](https://github.com/argotorg/act/blob/v0.2.0_documentation/tests/hevm/pass/multisource/erc20/erc20.act) constructor)*
 
 ```act
 creates 

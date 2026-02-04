@@ -5,7 +5,7 @@ In this section, we present a first look at an act specification by walking thro
 ## From EVM Smart Contract to act
 We start from an ERC20-style contract written in Solidity respectively Vyper:
 
-*(code snippets from [erc20.sol](https://github.com/argotorg/act/blob/main/tests/hevm/pass/multisource/erc20/erc20.sol) and [erc20.vy](https://github.com/argotorg/act/blob/main/tests/hevm/pass/multisource/erc20/erc20.vy); storage and function signatures only)*
+*(code snippets from [erc20.sol](https://github.com/argotorg/act/blob/v0.2.0_documentation/tests/hevm/pass/multisource/erc20/erc20.sol) and [erc20.vy](https://github.com/argotorg/act/blob/v0.2.0_documentation/tests/hevm/pass/multisource/erc20/erc20.vy); storage and function signatures only)*
 
 ```solidity
 contract Token {
@@ -56,7 +56,7 @@ An **act specification** describes the **externally observable behavior** of thi
 ## The Shape of an act Contract
 The translation of the code above into an act specification has the following top-level structure:
 
-*(snippet from [erc20.act](https://github.com/argotorg/act/blob/main/tests/hevm/pass/multisource/erc20/erc20.act), high-level structure only)*
+*(snippet from [erc20.act](https://github.com/argotorg/act/blob/v0.2.0_documentation/tests/hevm/pass/multisource/erc20/erc20.act), high-level structure only)*
 
 ```act,editable 
 contract Token:

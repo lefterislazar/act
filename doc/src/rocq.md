@@ -94,7 +94,7 @@ Theory.v
 - `-Q /path/to/act/lib ActLib` - Makes ActLib available (adjust path to your act installation)
 - List all `.v` files that should be compiled
 
-**For the [ERC20 example](https://github.com/argotorg/act/tree/main/tests/rocq/ERC20) in the act repository:**
+**For the [ERC20 example](https://github.com/argotorg/act/tree/v0.2.0_documentation/tests/rocq/ERC20) in the act repository:**
 
 ```rocq-project
 -Q . ERC20
@@ -280,7 +280,7 @@ The generated Rocq output will contain: <!-- <span style="color:red">talk about 
 *) Invariants are properties that hold in all reachable states of the state transition system, and can be used to prove properties about the contract.
 
 
-Let us explore the generated Rocq output for the ERC20 Token contract from [erc20.act](https://github.com/argotorg/act/blob/main/tests/hevm/pass/multisource/erc20/erc20.act).
+Let us explore the generated Rocq output for the ERC20 Token contract from [erc20.act](https://github.com/argotorg/act/blob/v0.2.0_documentation/tests/hevm/pass/multisource/erc20/erc20.act).
 
 The output will begin with importing the necessary libraries:
 ```Rocq
@@ -498,7 +498,7 @@ Inductive transition (ENV : Env) (STATE : State) (NextAddr : address) (STATE' : 
   -> transition ENV STATE NextAddr STATE' NextAddr'
 ```
 
-Since the Token contract does not refer to other contracts in its storage, the `transition` relation is essentially the same as the `Token_transition` relation. However, if a contract interacts with other contracts, the `transition` relation would need to account for those interactions as well. For instance, the Automated Market Maker contract [amm.act](https://github.com/argotorg/act/blob/main/tests/rocq/amm/amm.act) stores two ERC20 Tokens in its storage, `token0` and `token1`. The state transitions can 
+Since the Token contract does not refer to other contracts in its storage, the `transition` relation is essentially the same as the `Token_transition` relation. However, if a contract interacts with other contracts, the `transition` relation would need to account for those interactions as well. For instance, the Automated Market Maker contract [amm.act](https://github.com/argotorg/act/blob/v0.2.0_documentation/tests/rocq/amm/amm.act) stores two ERC20 Tokens in its storage, `token0` and `token1`. The state transitions can 
 thus arise from calling the `Amm` contract's own transitions, or from calling transitions on either of the two stored Token contracts. The `transition` for `Amm` thus includes cases for the `Amm_Transition`, `Token_transition` for `token0`, and `Token_transition` for `token1` and has the following shape
 ```rocq
 Inductive transition (ENV : Env) (STATE : State) (NextAddr : address) (STATE' : State) (NextAddr' : address) : Prop :=
@@ -581,7 +581,7 @@ You are then welcome to use this lemma in the proof of your properties.
 ## Proving properties using the act Rocq export
 
 Now that the state transition system is exported automatically, 
-one can use it to prove properties about the contract. In the [Theory.v](https://github.com/argotorg/act/blob/main/tests/rocq/ERC20/Theory.v) you can find a proof of the *sum of balances invariant*, stating that at any possible reachable state the sum of balances is the same, and equal to the total supply: 
+one can use it to prove properties about the contract. In the [Theory.v](https://github.com/argotorg/act/blob/v0.2.0_documentation/tests/rocq/ERC20/Theory.v) you can find a proof of the *sum of balances invariant*, stating that at any possible reachable state the sum of balances is the same, and equal to the total supply: 
 ```
 Theorem Token_sumOfBalances_eq_totalSupply : forall STATE,
     reachable STATE ->

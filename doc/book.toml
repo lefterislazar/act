@@ -17,6 +17,8 @@ after = ["links"]
 [output.html]
 additional-css = ["theme/custom.css"]
 additional-js = ["mermaid.min.js", "mermaid-init.js"]
+site-url = "/act/"
+git-repository-url = "https://github.com/argotorg/act"
 
 [output.html.playground]
 editable = true

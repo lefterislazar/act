@@ -1,21 +1,44 @@
 name: Deploy Book
 on:
-  workflow_dispatch:  # Enables manual triggering from GitHub UI only
+    workflow_dispatch:
 jobs:
-  build-and-deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: cachix/install-nix-action@v22
-      - uses: cachix/cachix-action@v12
-        with:
-          name: dapp
+    build:
+        name: Build Book
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v6
+            
+            - name: Install Nix
+              uses: cachix/install-nix-action@v31
+            
+            - name: Use Cachix
+              uses: cachix/cachix-action@v16
+              with:
+                  name: dapp
+            
+            - name: Build documentation
+              id: build
+              run: nix develop --ignore-environment --command make docs
 
-      - name: build docs
-        run: nix develop --ignore-environment --command make docs
+            - name: Upload artifact
+              id: deployment
+              uses: actions/upload-pages-artifact@v4
+              with:
+                  path: doc/book
+    deploy:
+        name: Deploy Book to GitHub Pages
+        needs: build
+        permissions:
+            pages: write
+            id-token: write
 
-      - name: publish docs
-        uses: JamesIves/github-pages-deploy-action@4.1.4
-        with:
-          branch: gh-pages
-          folder: doc/book
+        environment:
+            name: github-pages
+            url: ${{ steps.deployment.outputs.page_url }}
+
+        runs-on: ubuntu-latest
+        steps:
+            - name: Deploy to GitHub Pages
+              id: deployment
+              uses: actions/deploy-pages@v4
