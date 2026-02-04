@@ -4,7 +4,7 @@ In act, each contract explicitly declares its storage in the constructor and ini
 ## Storage
 In act, each contract explicitly declares its storage in the constructor and initializes it as defined in the source code. If the source code does not initialize a storage field, act uses defaults. For ERC20, the storage consists of two mappings and an integer:
 
-*(snippet from [erc20.sol](https://github.com/argotorg/act/blob/main/tests/hevm/pass/multisource/erc20/erc20.sol), updates block)*
+*(snippet from [erc20.sol](https://github.com/argotorg/act/blob/v0.2.0_documentation/tests/hevm/pass/multisource/erc20/erc20.sol), updates block)*
 
 ```solidity
     uint256 public totalSupply;
@@ -14,7 +14,7 @@ In act, each contract explicitly declares its storage in the constructor and ini
 
 The respective act declaration including initialization is:
 
-*(corresponding snippet from [erc20.act](https://github.com/argotorg/act/blob/main/tests/hevm/pass/multisource/erc20/erc20.act), constructor block)*
+*(corresponding snippet from [erc20.act](https://github.com/argotorg/act/blob/v0.2.0_documentation/tests/hevm/pass/multisource/erc20/erc20.act), constructor block)*
 
 ```act, editable
 creates
@@ -147,7 +147,7 @@ Further, exists the syntax for **adapting mappings** (used in `updates` blocks o
 
 In the ERC20 constructor, the storage is initialized as:
  
-*(snippet from [erc20.act](https://github.com/argotorg/act/blob/main/tests/hevm/pass/multisource/erc20/erc20.act), constructor block)*
+*(snippet from [erc20.act](https://github.com/argotorg/act/blob/v0.2.0_documentation/tests/hevm/pass/multisource/erc20/erc20.act), constructor block)*
 
 ```act
 creates
@@ -163,7 +163,7 @@ Here we see:
 
 In a transfer transition of the ERC20 contract the storage is updated as:
 
-*(snippet from [erc20.act](https://github.com/argotorg/act/blob/main/tests/hevm/pass/multisource/erc20/erc20.act), transfer transition)*
+*(snippet from [erc20.act](https://github.com/argotorg/act/blob/v0.2.0_documentation/tests/hevm/pass/multisource/erc20/erc20.act), transfer transition)*
 ```act
   updates
 
@@ -203,7 +203,7 @@ Basic references include:
 
 The preconditions in the transfer transition use references:
 
-*(snippet from transfer transition in [erc20.act](https://github.com/argotorg/act/blob/main/tests/hevm/pass/multisource/erc20/erc20.act))*
+*(snippet from transfer transition in [erc20.act](https://github.com/argotorg/act/blob/v0.2.0_documentation/tests/hevm/pass/multisource/erc20/erc20.act))*
 
 ```act
 iff
@@ -255,7 +255,7 @@ Base expressions are composite expressions built using operators, literals and v
 
 Consider the following `case` blocks from the `transferFrom` transition of the ERC20 contract:
 
-*(snippet from transferFrom transition in [erc20.act](https://github.com/argotorg/act/blob/main/tests/hevm/pass/multisource/erc20/erc20.act))*
+*(snippet from transferFrom transition in [erc20.act](https://github.com/argotorg/act/blob/v0.2.0_documentation/tests/hevm/pass/multisource/erc20/erc20.act))*
 
 ```act
 transition transferFrom(address src, address dst, uint amount) : uint256

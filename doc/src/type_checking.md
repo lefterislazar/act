@@ -30,7 +30,7 @@ When you write `inRange(uint256, expression)` in a precondition, the type-checke
 
 **Example:**
 
-*(snippet from [erc20.act](https://github.com/argotorg/act/blob/main/tests/hevm/pass/multisource/erc20/erc20.act), transfer transition)*
+*(snippet from [erc20.act](https://github.com/argotorg/act/blob/v0.2.0_documentation/tests/hevm/pass/multisource/erc20/erc20.act), transfer transition)*
 
 ```act
 transition transfer(address to, uint256 _value)
@@ -219,7 +219,7 @@ The type-checker implements a semantic check to verify if the current state and 
 
 We revisit the constructor of an AMM contract.
 
-*(snippet from [amm.act](https://github.com/argotorg/act/blob/main/tests/hevm/pass/multisource/amm/amm.act))*
+*(snippet from [amm.act](https://github.com/argotorg/act/blob/v0.2.0_documentation/tests/hevm/pass/multisource/amm/amm.act))*
 
 ```act
 contract Amm
@@ -282,7 +282,7 @@ If one of this two properties does not hold, the specification is ambiguous or i
 
 We revisit the transfer transition of the ERC20 contract: 
 
-*(snippet from [erc20.act](https://github.com/argotorg/act/blob/main/tests/hevm/pass/multisource/erc20/erc20.act), transfer transition)*
+*(snippet from [erc20.act](https://github.com/argotorg/act/blob/v0.2.0_documentation/tests/hevm/pass/multisource/erc20/erc20.act), transfer transition)*
 
 ```act
 transition transfer(address to, uint256 _value) : bool

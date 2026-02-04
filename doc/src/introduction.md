@@ -33,51 +33,51 @@ To **get started** with act, you can follow the installation instructions in the
 act provides two main verification backends that work with the same specification:
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                        act Specification                        │
-│                   (High-level .act file)                        │
-└─────────────────────────┬───────────────────────────────────────┘
-                          │
-                          ▼
-             ┌────────────────────────────┐
-             │   Type-checking and        │
-             │   No-aliasing Check        │
-             └────────────┬───────────────┘
-                          │
-         ┌────────────────┴────────────────┐
-         │                                 │
-         ▼                                 ▼
-    ┌────────────────────────┐      ┌──────────────────────────┐
-    │    HEVM Backend        │      │     Rocq Backend         │
-    │  (Automated Proofs)    │      │   (Manual Proofs)        │
-    └────────────┬───────────┘      └──────────┬───────────────┘
-                 │                             │
-       ┌─────────┴─────────┐                   │
-       │                   │                   │
-       ▼                   ▼                   ▼
-┌─────────────┐    ┌─────────────┐  ┌──────────────────────────┐
-│  Solidity   │    │   Vyper     │  │  Transition System       │
-│ .sol file   │    │  .vy file   │  │  Export to Rocq          │
-└──────┬──────┘    └──────┬──────┘  └───────────┬──────────────┘
-       │                  │                     │
-       └────────┬─────────┘                     │
-                ▼                               ▼
-    ┌────────────────────────┐      ┌──────────────────────────┐
-    │  Symbolic Execution    │      │ Interactive Theorem      │
-    │  of EVM Bytecode       │      │ Proving (Gallina/Ltac)   │
-    └────────────┬───────────┘      └──────────┬───────────────┘
-                 │                             │
-                 ▼                             │
-    ┌────────────────────────┐                 │
-    │ Equivalence Checking   │                 │
-    │ Spec ≡ Implementation  │                 │
-    │ (via SMT solvers)      │                 │
-    └────────────┬───────────┘                 │
-                 │                             │
-                 ▼                             ▼
-    Bytecode conforms              Higher-level properties
-    to specification              proven about the spec
-```
+          ┌─────────────────────────────────────────────────────────────────┐
+          │                        act Specification                        │
+          │                     (High-level .act file)                      │
+          └───────────────────────────────┬─────────────────────────────────┘
+                                          │
+                                          ▼
+                            ┌────────────────────────────┐
+                            │     Type-checking and      │
+                            │     No-aliasing Check      │
+                            └─────────────┬──────────────┘
+                                          │
+                      ┌───────────────────┴──────────────────┐
+                      │                                      │
+                      ▼                                      ▼
+          ┌────────────────────────┐           ┌──────────────────────────┐
+          │      HEVM Backend      │           │       Rocq Backend       │
+          │   (Automated Proofs)   │           │      (Manual Proofs)     │
+          └───────────┬────────────┘           └─────────────┬────────────┘
+                      │                                      │
+           ┌──────────┴─────────┐                            │
+           │                    │                            │
+           ▼                    ▼                            ▼
+    ┌─────────────┐      ┌─────────────┐       ┌──────────────────────────┐
+    │  Solidity   │      │    Vyper    │       │    Transition System     │
+    │  .sol file  │      │  .vy file   │       │     Export to Rocq       │
+    └──────┬──────┘      └──────┬──────┘       └─────────────┬────────────┘
+           │                    │                            │
+           └──────────┬─────────┘                            │
+                      ▼                                      ▼
+         ┌────────────────────────┐            ┌──────────────────────────┐
+         │   Symbolic Execution   │            │   Interactive Theorem    │
+         │    of EVM Bytecode     │            │  Proving (Gallina/Ltac)  │
+         └────────────┬───────────┘            └─────────────┬────────────┘
+                      │                                      │
+                      ▼                                      │
+         ┌────────────────────────┐                          │
+         │  Equivalence Checking  │                          │
+         │ Spec ≡ Implementation  │                          │
+         │   (via SMT solvers)    │                          │
+         └────────────┬───────────┘                          │
+                      │                                      │
+                      ▼                                      ▼
+              Bytecode conforms                    Higher-level properties
+              to specification                      proven about the spec
+``` 
 
 **HEVM Backend**: Automatically proves that EVM bytecode (compiled from Solidity or Vyper) correctly implements the act specification. It uses symbolic execution to explore all possible execution paths and SMT solvers (CVC5, Z3, or Bitwuzla) to verify equivalence.
 
