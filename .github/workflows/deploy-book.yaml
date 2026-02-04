@@ -1,4 +1,4 @@
-name: Latest Deploy Book
+name: Deploy Book
 on:
     workflow_dispatch:
 jobs:
