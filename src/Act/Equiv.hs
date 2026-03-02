@@ -289,7 +289,6 @@ callArgConstraints callenv (Interface _ args) = map callArgConstraint args
       fromCalldataFramgment (St _ word) = word
       fromCalldataFramgment _ = error "Internal error: only static types are supported"
 
-
 translateConstructor :: Monad m => BS.ByteString -> Constructor -> ContractMap -> ActT m ([(EVM.Expr EVM.End, ContractMap)], Calldata, Sig, [EVM.Prop])
 translateConstructor bytecode (Constructor _ cid iface _ preconds cases _ _) cmap = do
   let argConstraints = callArgConstraints emptyEnv iface
@@ -1037,7 +1036,7 @@ exponentiate pow base _ _ = ((base, pow), [])
 -- | Wrapper for the equivalenceCheck function of hevm
 checkEquiv :: App m => SolverGroup -> [EVM.Expr EVM.End] -> [EVM.Expr EVM.End] -> m [EquivResult]
 checkEquiv solvers l1 l2 = do
-  EqIssues res _ <- equivalenceCheck' solvers l1 l2 False
+  EqIssues res _ <- equivalenceCheck' solvers Nothing l1 l2 False
   pure $ fmap (toEquivRes . fst) res
   where
     toEquivRes :: EVM.EquivResult -> EquivResult
@@ -1431,7 +1430,6 @@ checkAbi solver contract cmap = do
     checkBehv assertions (EVM.Success cnstr _ _ _) = assertions <> cnstr
     checkBehv _ (EVM.Failure _ _ _) = []
     checkBehv _ (EVM.Partial _ _ _) = []
-    checkBehv _ (EVM.ITE _ _ _) = error "Internal error: HEVM behaviours must be flattened"
     checkBehv _ (EVM.GVar _) = error "Internal error: unepected GVar"
 
     msg = "\x1b[1mThe following function selector results in behaviors not covered by the Act spec:\x1b[m"

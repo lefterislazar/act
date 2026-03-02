@@ -17,7 +17,7 @@ import Data.List
 import qualified Data.Map as M
 import qualified Data.Text as T
 import qualified Data.ByteString as BS
-import Control.Monad.ST (stToIO, ST)
+import Control.Monad.ST (stToIO, ST, RealWorld)
 import Control.Monad.Reader
 import Control.Monad 
 
@@ -50,10 +50,9 @@ defaultActConfig = Config
   { dumpQueries = False
   , dumpExprs = False
   , dumpEndStates = False
+  , dumpUnsolved = Nothing
   , debug = False
   , dumpTrace = False
-  , numCexFuzz = 0
-  , onlyCexFuzz = False
   , decomposeStorage = False
   , promiseNoReent = False
   , maxBufSize = 64
@@ -61,6 +60,8 @@ defaultActConfig = Config
   , maxDepth = Nothing
   , verb = 0
   , simp = True
+  , onlyDeployed = False
+  , earlyAbort = False
   }
 
 
@@ -110,7 +111,7 @@ checkPartial nodes =
   do showMsg ""
      showMsg "WARNING: hevm was only able to partially explore the given contract due to the following issues:"
      showMsg ""
-     showMsg . T.unpack . T.unlines . fmap (Format.indent 2 . ("- " <>)) . fmap Format.formatPartial . nubOrd $ (getPartials nodes)
+     showMsg . T.unpack . T.unlines . fmap (Format.indent 2 . ("- " <>)) . fmap Format.formatPartial . fmap fst . nubOrd $ (getPartials nodes)
 
 
 iterConfig :: IterConfig
@@ -124,24 +125,24 @@ iterConfig = IterConfig
 getRuntimeBranches :: App m => SolverGroup -> [(EVM.Expr EVM.EAddr, EVM.Contract)] -> Calldata -> [EVM.Prop] -> Int -> m [EVM.Expr EVM.End]
 getRuntimeBranches solvers contracts calldata precond fresh = do
   prestate <- liftIO $ stToIO $ abstractVM contracts calldata precond fresh
-  expr <- interpret (Fetch.oracle solvers Nothing) iterConfig prestate runExpr
-  let simpl = simplify expr
-  let nodes = flattenExpr simpl
-  checkPartial nodes
-  pure nodes
+  expr <- interpret (Fetch.oracle solvers Nothing Fetch.noRpc) iterConfig prestate runExpr noopPathHandler
+  let simpl = simplify <$> expr
+  -- let nodes = flattenExpr simpl
+  checkPartial simpl
+  pure simpl
 
 
 -- | decompiles the given EVM initcode into a list of Expr branches
 getInitcodeBranches :: App m => SolverGroup -> BS.ByteString -> IsPayable -> [(EVM.Expr EVM.EAddr, EVM.Contract)] -> Calldata -> [EVM.Prop] -> Int -> m [EVM.Expr EVM.End]
 getInitcodeBranches solvers initcode payable contracts calldata precond fresh = do
   initVM <- liftIO $ stToIO $ abstractInitVM initcode payable contracts calldata precond fresh
-  expr <- interpret (Fetch.oracle solvers Nothing) iterConfig initVM runExpr
-  let simpl = simplify expr
-  let nodes = flattenExpr simpl
-  checkPartial nodes
-  pure nodes
+  expr <- interpret (Fetch.oracle solvers Nothing Fetch.noRpc) iterConfig initVM runExpr noopPathHandler
+  let simpl = simplify <$> expr
+  -- let nodes = flattenExpr simpl
+  checkPartial simpl
+  pure simpl
 
-abstractInitVM :: BS.ByteString -> IsPayable -> [(EVM.Expr EVM.EAddr, EVM.Contract)] -> (EVM.Expr EVM.Buf, [EVM.Prop]) -> [EVM.Prop] -> Int -> ST s (EVM.VM EVM.Symbolic s)
+abstractInitVM :: BS.ByteString -> IsPayable -> [(EVM.Expr EVM.EAddr, EVM.Contract)] -> (EVM.Expr EVM.Buf, [EVM.Prop]) -> [EVM.Prop] -> Int -> ST RealWorld (EVM.VM EVM.Symbolic)
 abstractInitVM contractCode payable contracts cd precond fresh = do
   let value = EVM.TxValue
   let code = EVM.InitCode contractCode (fst cd)
@@ -161,7 +162,7 @@ initialContract isPayable code = EVM.Contract
   , EVM.codeOps     = EVM.mkCodeOps code
   , EVM.external    = False
   }
-abstractVM :: [(EVM.Expr EVM.EAddr, EVM.Contract)] -> (EVM.Expr EVM.Buf, [EVM.Prop]) -> [EVM.Prop] -> Int -> ST s (EVM.VM EVM.Symbolic s)
+abstractVM :: [(EVM.Expr EVM.EAddr, EVM.Contract)] -> (EVM.Expr EVM.Buf, [EVM.Prop]) -> [EVM.Prop] -> Int -> ST RealWorld (EVM.VM EVM.Symbolic)
 abstractVM contracts cd precond fresh = do
   let value = EVM.TxValue
   let (c, cs) = findInitContract
@@ -183,7 +184,7 @@ loadSymVM
   -> (EVM.Expr EVM.Buf, [EVM.Prop])
   -> Bool
   -> Int
-  -> ST s (EVM.VM EVM.Symbolic s)
+  -> ST RealWorld (EVM.VM EVM.Symbolic)
 loadSymVM (entryaddr, entrycontract) othercontracts callvalue cd create fresh =
   (EVM.makeVm $ EVM.VMOpts
      { contract = entrycontract
