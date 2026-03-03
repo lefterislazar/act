@@ -14,6 +14,7 @@ import Prelude hiding (GT, LT)
 
 import Data.Containers.ListUtils (nubOrd)
 import Data.List
+import qualified Data.List.NonEmpty as NE
 import qualified Data.Map as M
 import qualified Data.Text as T
 import qualified Data.ByteString as BS
@@ -55,6 +56,7 @@ defaultActConfig = Config
   , dumpTrace = False
   , decomposeStorage = False
   , promiseNoReent = False
+  , isolated = False
   , maxBufSize = 64
   , maxWidth = 100
   , maxDepth = Nothing
@@ -62,6 +64,7 @@ defaultActConfig = Config
   , simp = True
   , onlyDeployed = False
   , earlyAbort = False
+  , mergeMaxBudget = 100
   }
 
 
@@ -147,15 +150,15 @@ abstractInitVM contractCode payable contracts cd precond fresh = do
   let value = EVM.TxValue
   let code = EVM.InitCode contractCode (fst cd)
   vm <- loadSymVM (EVM.SymAddr "entrypoint", initialContract payable code) contracts value cd True fresh
-  pure $ vm { constraints = vm.constraints <> precond }
+  pure $ vm { constraints = (NE.init vm.constraints) `NE.prependList` (NE.singleton $ NE.last vm.constraints <> precond) }
 
 initialContract :: IsPayable -> EVM.ContractCode -> EVM.Contract
 initialContract isPayable code = EVM.Contract
   { EVM.code        = code
-  , EVM.storage     = EVM.ConcreteStore mempty
-  , EVM.tStorage    = EVM.ConcreteStore mempty
+  , EVM.storage     = NE.singleton $ EVM.ConcreteStore mempty
+  , EVM.tStorage    = NE.singleton $ EVM.ConcreteStore mempty
   , EVM.origStorage = EVM.ConcreteStore mempty
-  , EVM.balance     = if isPayable == Payable then EVM.TxValue else EVM.Lit 0
+  , EVM.balance     = if isPayable == Payable then NE.singleton EVM.TxValue else NE.singleton (EVM.Lit 0)
   , EVM.nonce       = if EVM.isCreation code then Just 1 else Just 0
   , EVM.codehash    = EVM.hashcode code
   , EVM.opIxMap     = EVM.mkOpIxMap code
@@ -167,7 +170,7 @@ abstractVM contracts cd precond fresh = do
   let value = EVM.TxValue
   let (c, cs) = findInitContract
   vm <- loadSymVM c cs value cd False fresh
-  pure $ vm { constraints = vm.constraints <> precond }
+  pure $ vm { constraints = (NE.init vm.constraints) `NE.prependList` (NE.singleton $ NE.last vm.constraints <> precond) }
 
   where
     findInitContract :: ((EVM.Expr 'EVM.EAddr, EVM.Contract), [(EVM.Expr 'EVM.EAddr, EVM.Contract)])

@@ -2,7 +2,7 @@ cabal-version: 2.2
 
 name:       act
 version:    0.2.0
-authors:    Lefteris Lazaropoulos, Zoe Paraskevopoulou, Anja Petkovic Komel, Sophie Rain, dxo, Martin Lundfall
+author:     Lefteris Lazaropoulos, Zoe Paraskevopoulou, Anja Petkovic Komel, Sophie Rain, dxo, Martin Lundfall
 maintainer: zoe.paraskevopoulou@argot.org
 
 flag ci

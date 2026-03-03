@@ -39,7 +39,7 @@ checkEntailment solver smttimeout debug constraints = do
     solver' <- case solver of
           Solvers.Bitwuzla -> do
             hPutStrLn stderr "Warning: Using CVC5 solver instead of Bitwuzla for type checking."
-            pure Solvers.CVC5
+            pure Solvers.Z3
           s -> pure s
     let config = SMT.SMTConfig solver' (fromMaybe 20000 smttimeout) debug
     smtSolver <- spawnSolver config

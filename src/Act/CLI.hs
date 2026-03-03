@@ -24,7 +24,6 @@ import Data.Validation
 import qualified Data.Map as Map
 import Data.Map (Map)
 import Data.Maybe
-import qualified Data.Bifunctor as Bi
 import qualified Data.Text as Text
 import qualified Data.Text.IO as TIO
 import Prettyprinter hiding (annotate, line')
@@ -190,7 +189,7 @@ equivCheck actspec sol' vy' code' initcode' layout' sources' solver' timeout deb
     checkTypeConstraints specsContents solver' timeout debug' constraints
     checkUpdateAliasing (Act store contracts) solver' timeout debug'
     cmap <- createContractMap contracts inputsMap
-    res <- runEnv (Env config) $ Solvers.withSolvers solver' cores 1 (naturalFromInteger <$> timeout) $ \solvers ->
+    res <- runEnv (Env config) $ Solvers.withSolvers solver' cores (naturalFromInteger <$> timeout) Solvers.defMemLimit $ \solvers ->
       checkContracts solvers store cmap
     case res of
       Success _ -> pure ()
@@ -346,11 +345,11 @@ compileSources jsonPath jsonMap =
 bytecodes :: FilePath -> LayoutMode -> IO (Map (Maybe Id) (BS.ByteString, BS.ByteString))
 bytecodes srcFile SolidityLayout = do
   src <- TIO.readFile srcFile
-  json <- solc Solidity src False
+  jsn <- solc Solidity src False
   sol' <- -- maybe (render (text "Solidity compilation error" <> line) >> exitFailure) pure (readStdJSON json)
-    case readStdJSON json of
+    case readStdJSON jsn of
       Right (Contracts sol'') -> pure sol'' -- ure $ Map.lookup ("hevm.sol:" <> contract) sol <&> (.creationCode)
-      Left e -> error $ "unable to parse solidity output:\n" <> (Text.unpack json) <> "\n" <> show e -- TODO: better error here?
+      Left e -> error $ "unable to parse solidity output:\n" <> (Text.unpack jsn) <> "\n" <> show e -- TODO: better error here?
   pure $ Map.fromList $ map (\(fn,c) -> (Just $ Text.unpack $ snd $ Text.breakOnEnd ":" fn, (c.creationCode, c.runtimeCode))) $ Map.toList sol'
 bytecodes srcFile VyperLayout = Map.singleton Nothing <$> vyper srcFile
 

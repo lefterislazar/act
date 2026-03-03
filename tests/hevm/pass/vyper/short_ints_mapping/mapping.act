@@ -1,9 +1,9 @@
 contract A
 
-constructor()
+constructor(uint64 a, uint128 b, uint32 c)
 
 creates
-  mapping(uint64 => mapping(uint128 => uint32)) m := []
+  mapping(uint64 => mapping(uint128 => uint32)) m := [a => [b=>c]]
 
 
 transition setm(uint64 a, uint128 b, uint32 c)

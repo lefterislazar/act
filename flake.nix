@@ -4,16 +4,18 @@
   inputs = {
     flake-utils.url = "github:numtide/flake-utils";
     nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
+    nixpkgs_rocq.url = "github:nixos/nixpkgs/nixpkgs-unstable";
     hevm = {
-      url = "github:ethereum/hevm";
+      url = "github:lefterislazar/hevm/unknown-code";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };
 
-  outputs = { nixpkgs, flake-utils, hevm, ... }:
+  outputs = { nixpkgs, nixpkgs_rocq, flake-utils, hevm, ... }:
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = nixpkgs.legacyPackages.${system};
+        pkgs_rocq = nixpkgs_rocq.legacyPackages.${system};
         gitignore = pkgs.nix-gitignore.gitignoreSourcePure [ ./.gitignore ];
         hspkgs = pkgs.haskellPackages.override {
           overrides = self: super: {
@@ -47,8 +49,9 @@
             pkgs.jq
             pkgs.z3
             pkgs.cvc5
-            pkgs.coq
-            pkgs.coqPackages.stdlib
+            pkgs_rocq.rocq-core
+            pkgs_rocq.rocqPackages.stdlib
+            pkgs_rocq.rocqPackages.vsrocq-language-server
             pkgs.solc
             pkgs.mdbook
             pkgs.mdbook-mermaid

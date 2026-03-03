@@ -264,7 +264,7 @@ prestateStorageBounds contractMap locs = do
 
 -- | Extend an EVM.End expression with additional path conditions
 addPathCondition :: [EVM.Prop] -> EVM.Expr EVM.End -> EVM.Expr EVM.End
-addPathCondition pcs' (EVM.Success pcs tc b m) = EVM.Success (pcs' ++ pcs) tc b m
+addPathCondition pcs' (EVM.Success pcs tc b m is) = EVM.Success (pcs' ++ pcs) tc b m is
 addPathCondition _ end = end
 
 -- | The ABI requires that values of types with size less than 256 bits are padded, using sign extension where necessary
@@ -274,7 +274,7 @@ callArgConstraints callenv (Interface _ args) = map callArgConstraint args
   where
   callArgConstraint :: Arg -> EVM.Prop
   callArgConstraint arg = case arg of
-    (Arg atyp@(AbiArg AbiBoolType) x) -> EVM.POr (EVM.PEq (call x atyp) (EVM.Lit 0)) (EVM.PEq (call x atyp) (EVM.Lit 1)) 
+    (Arg atyp@(AbiArg AbiBoolType) x) -> EVM.POr (EVM.PEq (call x atyp) (EVM.Lit 0)) (EVM.PEq (call x atyp) (EVM.Lit 1))
     (Arg atyp x) ->
       let (sgnExt, size) = (signExtendArgType atyp, sizeOfArgType atyp) in
         if sgnExt
@@ -306,9 +306,9 @@ translateConstructor bytecode (Constructor _ cid iface _ preconds cases _ _) cma
   where
     calldata = makeCtrCalldata iface
     initcontract = EVM.C { EVM.code    = EVM.RuntimeCode (EVM.ConcreteRuntimeCode bytecode)
-                         , EVM.storage = EVM.ConcreteStore mempty
-                         , EVM.tStorage = EVM.ConcreteStore mempty
-                         , EVM.balance = EVM.Lit 0
+                         , EVM.storage = NE.singleton $ EVM.ConcreteStore mempty
+                         , EVM.tStorage = NE.singleton $ EVM.ConcreteStore mempty
+                         , EVM.balance = NE.singleton $ EVM.Lit 0
                          , EVM.nonce   = Just 1
                          }
     integratePathConds ((end, cm), pcs) = (addPathCondition pcs end, cm)
@@ -319,7 +319,7 @@ translateConstructorCase bytecode initmap cdataprops bounds preconds (Case _ cas
   casecond' <- toProp initmap emptyEnv casecond
   cmap' <- applyUpdates initmap initmap emptyEnv upds
   let acmap = abstractCmap initAddr cmap'
-  pure (simplify $ EVM.Success (cdataprops <> preconds' <> bounds <> [casecond'] <> symAddrCnstr cmap') mempty (EVM.ConcreteBuf bytecode) (M.map fst cmap'), acmap)
+  pure (simplify $ EVM.Success (cdataprops <> preconds' <> bounds <> [casecond'] <> symAddrCnstr cmap') mempty (EVM.ConcreteBuf bytecode) (M.map fst cmap') [], acmap)
   -- TODO: check: why was it symAddrCnstr acmap before?
 
 symAddrCnstr :: ContractMap -> [EVM.Prop]
@@ -357,7 +357,7 @@ translateBehvCase cmap cdataprops bounds preconds (Case _ casecond (upds, ret)) 
   ret' <- returnsToExpr cmap emptyEnv ret
   cmap' <- applyUpdates cmap cmap emptyEnv upds
   let acmap = abstractCmap initAddr (M.map (first simplify) cmap')
-  pure (simplify $ EVM.Success (preconds' <> bounds <> [casecond'] <> cdataprops <> symAddrCnstr cmap') mempty ret' (M.map fst cmap'), acmap)
+  pure (simplify $ EVM.Success (preconds' <> bounds <> [casecond'] <> cdataprops <> symAddrCnstr cmap') mempty ret' (M.map fst cmap') [], acmap)
 
 -- | Show a contract map for debugging purposes
 showCmap :: ContractMap -> String
@@ -387,7 +387,7 @@ writeToRef readMap writeMap callenv (TRef _ _ ref) (TExp typ e) | isBalanceRef r
         _ -> error $ "Internal error: BALANCE can only be assigned an integer value, found " ++ show typ
   where
     updateBalance :: EVM.Expr EVM.EWord -> EVM.Expr EVM.EContract -> EVM.Expr EVM.EContract
-    updateBalance bal (EVM.C code storage tstorage _ nonce) = EVM.C code storage tstorage bal nonce
+    updateBalance bal (EVM.C code storage tstorage _ nonce) = EVM.C code storage tstorage (NE.singleton bal) nonce
     updateBalance _ (EVM.GVar _) = error "Internal error: contract cannot be a global variable"
 
 writeToRef readMap writeMap callenv tref@(TRef _ _ ref) (TExp typ e) = do
@@ -452,11 +452,11 @@ writeToRef readMap writeMap callenv tref@(TRef _ _ ref) (TExp typ e) = do
         EVM.Or (newmask newShifted) (EVM.And prev mask)
 
     updateStorage :: (EVM.Expr EVM.Storage -> EVM.Expr EVM.Storage) -> EVM.Expr EVM.EContract -> EVM.Expr EVM.EContract
-    updateStorage updfun (EVM.C code storage tstorage bal nonce) = EVM.C code (updfun storage) tstorage bal nonce
+    updateStorage updfun (EVM.C code storage tstorage bal nonce) = EVM.C code (updfun (NE.head storage) NE.:| NE.tail storage) tstorage bal nonce
     updateStorage _ (EVM.GVar _) = error "Internal error: contract cannot be a global variable"
 
     readStorage :: EVM.Expr EVM.EWord -> EVM.Expr EVM.EContract -> EVM.Expr EVM.EWord
-    readStorage addr (EVM.C _ storage _ _ _) = EVM.SLoad addr storage
+    readStorage addr (EVM.C _ storage _ _ _) = EVM.SLoad addr (NE.head storage)
     readStorage _ (EVM.GVar _) = error "Internal error: contract cannot be a global variable"
 
     updateNonce :: EVM.Expr EVM.EContract -> EVM.Expr EVM.EContract
@@ -517,9 +517,9 @@ createContract readMap writeMap callenv freshAddr newCid (Create _ cid args cv) 
           applyUpdates readMap (M.insert freshAddr (contract, cid) writeMap) callenv'' upds
 
         contract = EVM.C { EVM.code  = EVM.RuntimeCode (EVM.ConcreteRuntimeCode bytecode)
-                           , EVM.storage = EVM.ConcreteStore mempty
-                           , EVM.tStorage = EVM.ConcreteStore mempty
-                           , EVM.balance = EVM.Lit 0
+                           , EVM.storage = NE.singleton $ EVM.ConcreteStore mempty
+                           , EVM.tStorage = NE.singleton $ EVM.ConcreteStore mempty
+                           , EVM.balance = NE.singleton $ EVM.Lit 0
                            , EVM.nonce = Just 1
                            }
     Nothing -> error "Internal error: constructor not found"
@@ -886,7 +886,7 @@ refToExp :: forall m k. Monad m => ContractMap -> CallEnv -> Ref k -> ActBTT m (
 refToExp cmap callenv ref | isBalanceRef ref = do
     caddr <- baseAddr cmap callenv ref
     case M.lookup caddr cmap of
-      Just (EVM.C _ _ _ bal _, _) -> pure bal
+      Just (EVM.C _ _ _ bal _, _) -> pure $ NE.head bal
       Just (EVM.GVar _, _) -> error "Internal error: contract cannot be a global variable"
       Nothing -> error $ "Internal error: contract not found " <> show caddr <> "\nmap:" <> show cmap
 -- calldata variable
@@ -913,7 +913,7 @@ refToExp cmap callenv r = do
 accessStorage :: ContractMap -> EVM.Expr EVM.EWord -> EVM.Expr EVM.EAddr -> EVM.Expr EVM.EWord
 accessStorage cmap slot addr = case M.lookup addr cmap of
   Just (EVM.C _ storage _ _ _, _) ->
-    EVM.SLoad slot storage
+    EVM.SLoad slot $ NE.head storage
   Just (EVM.GVar _, _) -> error "Internal error: contract cannot be a global variable"
   Nothing -> error $ "Internal error: contract not found " <> show addr <> "\nmap:" <> show cmap
 
@@ -1022,7 +1022,7 @@ checkOp _ _ _ _ e@(UIntMax _ _) =  error $ "Internal error: checkOp: invalid in 
 checkOp _ _ _ _ (ITE _ _ _ _) =  error "TODO ITE in checkOp"
 checkOp _ _ _ _ (IntEnv _ _) = pure $ EVM.Lit 1
 
-          
+
 -- TODO: check is this is the same for vyper
 --                 Power       ->        Base        ->         Max        -> Exp -> ((Base',Power,Checks)
 exponentiate :: EVM.Expr EVM.EWord -> EVM.Expr EVM.EWord -> EVM.Expr EVM.EWord -> Int -> ((EVM.Expr EVM.EWord, EVM.Expr EVM.EWord), [EVM.Expr EVM.EWord])
@@ -1075,9 +1075,9 @@ getInitContractState p solvers cname iface preconds cmap = do
         Just (Contract _ (Constructor _ cname' iface' _ preconds' ((Case _ _ upds):_) _ _) _, _, bytecode) -> do
           (icmap, check) <- getInitContractState p solvers cname' iface' preconds' M.empty
           let contract = EVM.C { EVM.code  = EVM.RuntimeCode (EVM.ConcreteRuntimeCode bytecode)
-                               , EVM.storage = EVM.ConcreteStore mempty
-                               , EVM.tStorage = EVM.ConcreteStore mempty
-                               , EVM.balance = EVM.Lit 0
+                               , EVM.storage = NE.singleton $ EVM.ConcreteStore mempty
+                               , EVM.tStorage = NE.singleton $ EVM.ConcreteStore mempty
+                               , EVM.balance = NE.singleton $ EVM.Lit 0
                                , EVM.nonce = Just 1
                                }
           let icmap' = M.insert addr (contract, cid) icmap
@@ -1230,15 +1230,15 @@ translateCmap cmap payable = foldl go ([], []) (M.toList cmap)
         { EVM.code        = code
         , EVM.storage     = storage
         , EVM.tStorage    = tstorage
-        , EVM.origStorage = storage
-        , EVM.balance     = if payable == Payable && addr == initAddr then EVM.Add EVM.TxValue balance else balance
+        , EVM.origStorage = NE.last storage -- TODO: ???
+        , EVM.balance     = if payable == Payable && addr == initAddr then (EVM.Add EVM.TxValue $ NE.head balance) NE.:| NE.tail balance else balance
         , EVM.nonce       = nonce
         , EVM.codehash    = EVM.hashcode code
         , EVM.opIxMap     = EVM.mkOpIxMap code
         , EVM.codeOps     = EVM.mkCodeOps code
         , EVM.external    = False
         }
-      , [EVM.PLEq balance (EVM.Add EVM.TxValue balance) | payable == Payable && addr == initAddr])
+      , [EVM.PLEq (NE.head balance) (EVM.Add EVM.TxValue (NE.head balance)) | payable == Payable && addr == initAddr])
     toContract _ (EVM.GVar _) = error "Internal error: contract cannot be gvar"
 
 
@@ -1255,13 +1255,13 @@ abstractCmap this cmap =
         EVM.SStore offset (EVM.WAddr symaddr) (traverseStorage addr storage)
       else traverseStorage addr storage
     traverseStorage addr (EVM.SStore _ _ storage) = traverseStorage addr storage
-    traverseStorage addr (EVM.ConcreteStore _) = EVM.AbstractStore addr Nothing
+    traverseStorage addr (EVM.ConcreteStore _) = EVM.AbstractStore addr Nothing Nothing
     traverseStorage _ s@(EVM.AbstractStore {}) = s
     traverseStorage _ _ = error "Internal error: unexpected storage shape"
 
     makeContract :: EVM.Expr EVM.EAddr -> (EVM.Expr EVM.EContract, Id) -> (EVM.Expr EVM.EContract, Id)
     makeContract addr (EVM.C code storage tstorage _ _, cid) =
-      (EVM.C code (simplify (traverseStorage addr (simplify storage))) tstorage (EVM.Balance addr) (Just 0), cid)
+      (EVM.C code (simplify . traverseStorage addr . simplify <$> storage) tstorage (NE.singleton $ EVM.Balance addr Nothing) (Just 0), cid)
     makeContract _ (EVM.GVar _, _) = error "Internal error: contract cannot be gvar"
 
 -- Since only one address fits in each slot, we weed to find the topmost one stored in each slot
@@ -1299,7 +1299,7 @@ pruneContractState entryaddr cmap =
         go addr' acc =
           case M.lookup addr' cmap' of
             Just (EVM.C _ storage _ _ _, _) ->
-              let addrs = snd <$> getAddrs storage in
+              let addrs = concatMap (fmap snd . getAddrs) $ NE.toList storage in
               foldr go (addr':acc) addrs
             Just (EVM.GVar _, _) -> error "Internal error: contract cannot be gvar"
             Nothing -> error "Internal error: contract not found"
@@ -1324,8 +1324,8 @@ checkStoreIsomorphism p cmap1 cmap2 =
     bfs ((addr1, addr2):q1) q2  map1 map2 =
       case (M.lookup (EVM.SymAddr addr1) cmap1, M.lookup (EVM.SymAddr addr2) cmap2) of
         (Just (EVM.C _ storage1 _ _ _, _), Just (EVM.C _ storage2 _ _ _, _)) ->
-          let addrs1 = sortOn fst $ getAddrs storage1 in
-          let addrs2 = sortOn fst $ getAddrs storage2 in
+          let addrs1 = concatMap (sortOn fst . getAddrs) (NE.toList storage1) in
+          let addrs2 = concatMap (sortOn fst . getAddrs) (NE.toList storage2) in
           visit addrs1 addrs2 map1 map2 q2 `bindValidation` (\(renaming1, renaming2, q2') ->
           bfs q1 q2' renaming1 renaming2)
         (_, _) -> error "Internal error: contract not found in map"
@@ -1371,7 +1371,7 @@ checkTree cmap = do
     traverseTree root seen =
         case M.lookup root cmap of
         Just (EVM.C _ storage _ _ _, _) ->
-            foldValidation (\seen' (_, addr) -> traverseTree addr seen') (S.insert root seen) (getAddrs storage)
+            foldValidation (\seen' (_, addr) -> traverseTree addr seen') (S.insert root seen) (concatMap getAddrs storage)
         _ -> error "Internal error: contract not found in map"
 
 
@@ -1380,7 +1380,7 @@ inputSpace :: [EVM.Expr EVM.End] -> [EVM.Prop]
 inputSpace exprs = map aux exprs
   where
     aux :: EVM.Expr EVM.End -> EVM.Prop
-    aux (EVM.Success c _ _ _) = EVM.pand c
+    aux (EVM.Success c _ _ _ _) = EVM.pand c
     aux _ = error "List should only contain success behaviours"
 
 -- | Check whether two lists of behaviours cover exactly the same input space
@@ -1427,7 +1427,7 @@ checkAbi solver contract cmap = do
     actSigs (Contract _ _ behvs) = actSig <$> behvs
 
     checkBehv :: [EVM.Prop] -> EVM.Expr EVM.End -> [EVM.Prop]
-    checkBehv assertions (EVM.Success cnstr _ _ _) = assertions <> cnstr
+    checkBehv assertions (EVM.Success cnstr _ _ _ _) = assertions <> cnstr
     checkBehv _ (EVM.Failure _ _ _) = []
     checkBehv _ (EVM.Partial _ _ _) = []
     checkBehv _ (EVM.GVar _) = error "Internal error: unepected GVar"
