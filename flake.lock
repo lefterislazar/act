@@ -156,11 +156,11 @@
         "solidity": "solidity"
       },
       "locked": {
-        "lastModified": 1772469416,
-        "narHash": "sha256-Xebg3xlAog1tb2LEQWLsp3mKAp4vk7myNhW+jLk7Sw8=",
+        "lastModified": 1772641546,
+        "narHash": "sha256-hsanzku5Di26f4jo0doYuIZCx6GwejjhF1ah8Jw62IA=",
         "owner": "lefterislazar",
         "repo": "hevm",
-        "rev": "b667de22f3032940a7b844a665d4f7ca3d1b76e0",
+        "rev": "433cf6e6628575852ce61834e7ca515d7d461b55",
         "type": "github"
       },
       "original": {
