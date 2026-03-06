@@ -24,6 +24,7 @@ import Act.Error
   'case'                      { L CASE _ }
   'returns'                   { L RETURNS _ }
   'updates'                   { L UPDATES _ }
+  'storage'                   { L STORAGE _ }
   'noop'                      { L NOOP _ }
   'iff'                       { L IFF _ }
   'iff in range'              { L IFFINRANGE _ }
@@ -49,6 +50,9 @@ import Act.Error
   'with'                      { L WITH _ }
   'value'                     { L VALUE _ }
   'address(0)'                { L ADDR0 _ }
+  'call'                      { L CALL _ }
+  'static'                    { L STATIC _ }
+  'interaction'               { L INTERACTION _ }
   -- builtin types
   'uint'                      { L (UINT $$) _ }
   'int'                       { L (INT $$) _ }
@@ -169,8 +173,8 @@ Contract : 'contract' id  Constructor list(Transition) { Contract (posn $1) (nam
 Constructor : 'constructor'
               Interface
               IsPayable
-              Precondition
-              ConstrCases
+              Declarations
+              Block
               Ensures
               Invariants                              { Constructor (posn $1) $2
                                                         $3 $4 $5 $6 $7 }
@@ -180,10 +184,9 @@ Transition : 'transition'
               Interface
               IsPayable
               ReturnType
-              Precondition
-              Cases
+              Block
               Ensures                                  { Transition (posn $1) (name $2)
-                                                         $3 $4 $5 $6 $7 $8 }
+                                                         $3 $4 $5 $6 $7 }
 
 
 IsPayable : 'payable'                                 { Payable }
@@ -198,16 +201,40 @@ Invariants : optblock('invariants', Expr)             { $1 }
 
 Interface : '(' seplist(Arg, ',') ')'                 { Interface (posn $1) $2 }
 
+Block : '{' Precondition Cases '}'                    { Block $2 $3 }
+
+Effects : Updates                                     { LocalOnly $1 Nothing }
+        | Updates Returns                             { LocalOnly $1 (Just $2) }
+        | Updates InteractionBlock Block              { LocalAndInteraction $1 $2 $3 }
+
+IsStatic : 'static'                                   { True }
+         | {- empty -}                                { False }
+
+MaybeSendValue : '{' 'value' ':' Expr '}'             { Just $4 }
+               | {- empty -}                          { Nothing }
+
+InteractionBlock : optblock('interaction', Interaction) { $1 }
+
+Interaction : IsStatic Expr '.' id MaybeSendValue '(' seplist(Expr, ',') ')'
+                                                      { CallI (posn $3) $1 $2 (name $4) $7 $5 Nothing }
+
+            | Interface '='
+              IsStatic Expr '.' id MaybeSendValue '(' seplist(Expr, ',') ')'
+                                                      { CallI (posn $5) $3 $4 (name $6) $9 $7 (Just $1) }
+
+            | id '=' 'new' id MaybeSendValue '(' seplist(Expr, ',') ')'
+                                                      { CreateI (posn $3) (name $1) (name $4) $7 $5 }
+
 
 ConstrCases : Creates                                 { [Case nowhere (BoolLit nowhere True) $1] }
             | nonempty(ConstrCase)                    { $1 }
 
 ConstrCase : 'case' Expr ':' Creates                  { Case (posn $1) $2 $4 }
 
-Cases : Post                                          { [Case nowhere (BoolLit nowhere True) $1] }
+Cases : Effects                                       { [Case nowhere (BoolLit nowhere True) $1] }
       | nonempty(Case)                                { $1 }
 
-Case : 'case' Expr ':' Post                           { Case (posn $1) $2 $4 }
+Case : 'case' Expr ':' Effects                        { Case (posn $1) $2 $4 }
 
 
 Post  : Updates                                       { ($1, Nothing) }
@@ -215,9 +242,13 @@ Post  : Updates                                       { ($1, Nothing) }
 
 Returns : 'returns' Expr                              { $2 }
 
+Declarations : 'storage' list(Declaration)            { $2 }
+
+Declaration : ValueType id                            { StorageVar (posn $2) $1 (name $2) }
+
 Creates : 'creates' list(Create)                      { $2 }
 
-Create : ValueType id ':=' Expr                       { (StorageVar (posn $3) $1 (name $2), $4) }
+Create : ValueType id ':=' Expr                       { (StorageVar (posn $2) $1 (name $2), $4) }
 
 Updates : 'updates' list(Store)                       { $2 }
         | {- empty -}                                 { [] }
