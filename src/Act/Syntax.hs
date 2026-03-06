@@ -624,7 +624,7 @@ idFromRewrites e = case e of
     idFromRef' (Untyped.RField _ en _) = idFromRef' en
 
 -- | True iff the case is a wildcard.
-isWild :: Untyped.Case t -> Bool
+isWild :: Untyped.Case -> Bool
 isWild (Untyped.Case _ (WildExp _) _) = True
 isWild _                      = False
 

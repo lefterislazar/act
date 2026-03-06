@@ -1,6 +1,14 @@
 -- Data types for the Act AST after parsing. It is also equipped with position information
 -- for printing informative error messages.
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 module Act.Syntax.Untyped (module Act.Syntax.Untyped, module Act.Syntax.Types) where
 
@@ -20,13 +28,27 @@ data IsPayable = Payable | NonPayable
 data Contract = Contract Pn Id Constructor [Transition]
   deriving (Eq, Show)
 
-data Constructor = Constructor Pn Interface IsPayable Iff (Cases Creates) Ensures Invariants
+data Constructor = Constructor Pn Interface IsPayable Declarations Block Ensures Invariants
   deriving (Eq, Show)
 
-data Transition = Transition Pn Id Interface IsPayable RetType Iff (Cases (StorageUpdates, Maybe Expr)) Ensures
+data Transition = Transition Pn Id Interface IsPayable RetType Block Ensures
   deriving (Eq, Show)
 
 type RetType = Maybe ArgType
+
+data Block = Block Iff Cases
+  deriving (Eq, Show)
+
+-- This GADT stuff probably not good idea for a parser..?
+data Effects where
+  LocalAndInteraction :: StorageUpdates -> [Interaction] -> Block -> Effects
+  LocalOnly           :: StorageUpdates -> (Maybe Expr) -> Effects
+  deriving (Eq, Show)
+
+                         --statc addr fn  args   value        rets
+data Interaction = CallI Pn Bool Expr Id [Expr] (Maybe Expr) (Maybe Interface)
+                 | CreateI Pn Id Id [Expr] (Maybe Expr)
+  deriving (Eq, Show)                  
 
 type Iff = [Expr]
 
@@ -40,12 +62,12 @@ data Interface = Interface Pn [Arg]
 instance Show Interface where
   show (Interface _ d) = "(" <> intercalate ", " (fmap show d) <> ")"
 
-type Cases a = [Case a]
+type Cases = [Case]
   
-data Case a = Case Pn Expr a
+data Case = Case Pn Expr Effects
   deriving (Eq, Show)
 
-type Creates = [Assign]
+type Declarations = [StorageVar]
   
 data StorageUpdate = Update Ref Expr
   deriving (Eq, Show)

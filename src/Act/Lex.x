@@ -37,6 +37,7 @@ tokens :-
   case                                  { mk CASE }
   returns                               { mk RETURNS }
   updates                               { mk UPDATES }
+  storage                               { mk STORAGE }
   noop                                  { mk NOOP }
 
   iff $white+ in $white+ range          { mk IFFINRANGE }
@@ -61,6 +62,9 @@ tokens :-
   with                                  { mk WITH }
   value                                 { mk VALUE }
   payable                               { mk PAYABLE }
+  call                                  { mk CALL }
+  static                                { mk STATIC }
+  interaction                           { mk INTERACTION }
   -- builtin types
   uint $digit+                          { \ p s -> L (UINT (read (drop 4 s))) p }
   int  $digit+                          { \ p s -> L (INT  (read (drop 3 s))) p }
@@ -139,6 +143,7 @@ data LEX =
   | CASE
   | RETURNS
   | UPDATES
+  | STORAGE
   | NOOP
   | IFFINRANGE
   | INRANGE
@@ -162,6 +167,9 @@ data LEX =
   | PRE
   | POST
   | PAYABLE
+  | CALL
+  | STATIC
+  | INTERACTION
   | VALUE
   | NEW
   | WITH
