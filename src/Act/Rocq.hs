@@ -220,8 +220,6 @@ behvConds name i conds = do
       [ nameHypothesis "iff" $ coqprop <$> conds
       , [("nextAddrCnstrnt_State", nextAddrConstraintType <+> nextAddrVar <+> stateVar) ]
       , interfaceConstraints i
-      , [("envNextAddrConsistent", envNextAddrCnstrType <+> envVar <+> nextAddrVar)]
-      , [("stateEnvConsistent", envNextAddrStateCnstrType <+> envVar <+> nextAddrVar <+> stateVar)]
       ]) <> ",\n"
       <> (T.pack n <> "_conds") <+> envVar <+> arguments i <+> stateVar <+>nextAddrVar )
 
@@ -268,6 +266,8 @@ behvPred store name cname i cases = inductive
         caseBody c = indent 2 ((namedHyps . concat $
           [ [("conds", (T.pack name) <> "_conds" <+> envVar <+> arguments i <+> stateVar <+> nextAddrVar) ]
           , [("case_cond", coqprop c) ]
+          , [("envNextAddrConsistent", envNextAddrCnstrType <+> envVar <+> nextAddrVar)]
+          , [("stateEnvConsistent", envNextAddrStateCnstrType <+> envVar <+> nextAddrVar <+> stateVar)]
           , nameHypothesis ("bindings") bindingsHyp
           ]) <> ",\n"
           <> (T.pack name <> "_transition") 
@@ -598,6 +598,8 @@ retVal name i cases@((Case _ _ (_, Just ret0)):_) = do
         caseBody = (indent 2) . implication . concat $
           [ [(T.pack name) <> "_conds" <+> envVar <+> arguments i <+> stateVar <+> nextAddrVar ]
           , [ coqprop caseCond ]
+          , [ envNextAddrCnstrType <+> envVar <+> nextAddrVar]
+          , [ envNextAddrStateCnstrType <+> envVar <+> nextAddrVar <+> stateVar]
           , [retname (T.pack name) <+> envVar <+> arguments i <+> stateVar <+> nextAddrVar <+> typedexp ret]
           ]
 
