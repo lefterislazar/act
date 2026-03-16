@@ -29,14 +29,14 @@ addBounds (Act store contracts) = Act store (addBoundsContract <$> contracts)
 -- | Adds type bounds for calldata, environment vars, and external storage vars
 -- as preconditions
 addBoundsConstructor :: Constructor t -> Constructor t
-addBoundsConstructor ctor@(Constructor _ _ (Interface _ _) _ pre _ _ invs) =
-  ctor { _cpreconditions = pre'
+addBoundsConstructor ctor@(Constructor _ _ (Interface _ _) _ (Block iff cases) _ invs) =
+  ctor { _cblock = block'
        , _invariants = addBoundsInvariant ctor <$> invs }
     where
-      pre' = pre <> boundsConstructor ctor
+      block' = Block (iff <> boundsConstructor ctor) cases
 
 boundsConstructor :: Constructor t -> [Exp ABoolean t]
-boundsConstructor ctor@(Constructor _ _ (Interface _ decls) _ pre cases _ invs) = pre'
+boundsConstructor ctor@(Constructor _ _ (Interface _ decls) _ block _ invs) = pre'
     where
       pre' = nub $ mkCallDataBounds decls
              <> mkEthEnvBounds (ethEnvFromConstructor ctor)
@@ -45,30 +45,30 @@ boundsConstructor ctor@(Constructor _ _ (Interface _ decls) _ pre cases _ invs) 
               -- and the constructor cannot modify non-local locations.
              <> mkRefsBounds locs
 
-      locs = nub $ concatMap locsFromExp pre
+      locs = nub $ locsFromBlock block
              <> concatMap locsFromInvariant invs
-             <> concatMap locsFromConstrCase cases
+             -- <> concatMap locsFromConstrCase cases
 
 -- | Adds type bounds for calldata, environment vars, and storage vars as preconditions
 addBoundsBehaviour :: Behaviour t -> Behaviour t
-addBoundsBehaviour behv@(Behaviour _ _ _ (Interface _ _) _ pre _ _) =
-  behv { _preconditions = pre' }
+addBoundsBehaviour behv@(Behaviour _ _ _ (Interface _ _) _ (Block iff cases) _) =
+  behv { _block = block' }
     where
-      pre' = pre <> boundsBehaviour behv
+      block' = Block (iff <> boundsBehaviour behv) cases
 
 boundsBehaviour :: Behaviour t -> [Exp ABoolean t]
-boundsBehaviour behv@(Behaviour _ _ _ (Interface _ decls) _ pre cases _) = pre'
+boundsBehaviour behv@(Behaviour _ _ _ (Interface _ decls) _ block _) = pre'
     where
       pre' = nub $ mkCallDataBounds decls
              <> mkRefsBounds locs
              <> mkEthEnvBounds (ethEnvFromBehaviour behv)
 
-      locs = nub $ concatMap locsFromExp pre
-             <> concatMap locsFromCase cases
+      locs = nub $ locsFromBlock block
+             -- <> concatMap locsFromCase cases
 
 -- | Adds type bounds for calldata, environment vars, and storage vars
 addBoundsInvariant :: Constructor t -> Invariant t -> Invariant t
-addBoundsInvariant (Constructor _ _ (Interface _ decls) _ _ _ _ _) inv@(Invariant _ preconds storagebounds (PredTimed predicate _)) =
+addBoundsInvariant (Constructor _ _ (Interface _ decls) _ _ _ _) inv@(Invariant _ preconds storagebounds (PredTimed predicate _)) =
   inv { _ipreconditions = preconds', _istoragebounds = storagebounds' }
     where
       preconds' = nub $ preconds
@@ -81,7 +81,7 @@ addBoundsInvariant (Constructor _ _ (Interface _ decls) _ _ _ _ _) inv@(Invarian
       locs = nub $ concatMap locsFromExp (preconds <> storagebounds)
              <> locsFromExp predicate
       --(nonlocalLocs, localLocs) = partition (not . isLocalLoc) locs
-addBoundsInvariant (Constructor _ _ (Interface _ decls) _ _ _ _ _) inv@(Invariant _ preconds storagebounds (PredUntimed predicate)) =
+addBoundsInvariant (Constructor _ _ (Interface _ decls) _ _ _ _) inv@(Invariant _ preconds storagebounds (PredUntimed predicate)) =
   inv { _ipreconditions = preconds', _istoragebounds = storagebounds' }
     where
       preconds' = nub $ preconds

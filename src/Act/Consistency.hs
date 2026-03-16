@@ -53,7 +53,7 @@ decompLRef :: Ref LHS -> ([Id], [TypedExp])
 decompLRef ref = go ref [] []
   where
   go :: Ref LHS -> [Id] -> [TypedExp] -> ([Id], [TypedExp])
-  go (SVar _ _ _ name) ids ixs = (name : ids, ixs)
+  go (SVar _ _ _ _ name) ids ixs = (name : ids, ixs)
   go (RArrIdx _ r ix _) ids ixs = go r ids ((TExp (TInteger 256 Unsigned) ix) : ixs)
   go (RField _ r _ name) ids ixs = go r (name : ids) ixs
 
@@ -73,8 +73,8 @@ aliasingCondition (Update _ r1 _) (Update _ r2 _) = if ids1 == ids2 then zipWith
 aliasingCandidates :: [StorageUpdate] -> [((StorageUpdate, StorageUpdate), [Exp ABoolean])]
 aliasingCandidates upds = mapMaybe (\p -> (p,) <$> uncurry aliasingCondition p) $ combine upds
 
-checkCaseUpdateAliasing :: Id -> [Arg] -> [Exp ABoolean] -> Bcase -> (Id, [(StorageUpdate, StorageUpdate)], SMTExp, SolverInstance -> IO Model)
-checkCaseUpdateAliasing bname decls preconds (Case _ casecond (upds, _)) =
+checkCaseUpdateAliasing :: Id -> [Arg] -> [Exp ABoolean] -> Case -> (Id, [(StorageUpdate, StorageUpdate)], SMTExp, SolverInstance -> IO Model)
+checkCaseUpdateAliasing bname decls preconds (Case _ casecond effects) =
   (bname, fst <$> maybeAliasedPairs, mkDefaultSMT activeRefs envs bname decls preconds integerBounds assertion, getModel)
   where
     maybeAliasedPairs = aliasingCandidates upds
@@ -104,8 +104,10 @@ checkCaseUpdateAliasing bname decls preconds (Case _ casecond (upds, _)) =
 
 
 checkBehvUpdateAliasing :: Behaviour -> [(Id, [(StorageUpdate, StorageUpdate)], SMTExp, SolverInstance -> IO Model)]
-checkBehvUpdateAliasing (Behaviour _ bname _ (Interface _ decls) _ preconds cases _) =
-  checkCaseUpdateAliasing bname decls preconds <$> cases
+checkBehvUpdateAliasing (Behaviour _ bname _ (Interface _ decls) _ block' _) = checkBlockUpdateAliasing bname decls block'
+
+checkBlockUpdateAliasing :: Id -> [Arg] -> Block ->  [(Id, [(StorageUpdate, StorageUpdate)], SMTExp, SolverInstance -> IO Model)]
+checkBlockUpdateAliasing bname decls (Block iff cases) = checkCaseUpdateAliasing bname decls iff <$> cases
 
 
 checkUpdateAliasing :: Act -> Solvers.Solver -> Maybe Integer -> Bool -> IO ()
@@ -173,7 +175,7 @@ printAliasedRef (RMapIdx _ (TRef _ _ ref) idx) = do
   pure $ pr <> (string "[") <> pix <> (string "]")
 printAliasedRef (RField _ ref _ id') =
   liftA2 (<>) (printAliasedRef ref) (pure $ string id')
-printAliasedRef (SVar _ _ _ id') = pure $ string id'
+printAliasedRef (SVar _ _ _ _ id') = pure $ string id'
 printAliasedRef (CVar _ _ id') = pure $ string id'
 
 printAliasedLoc :: Ref k -> ModelCtx DocAnsi
@@ -261,20 +263,6 @@ modelEval e = case e of
 
   Array _ l -> case (sing @a) of
     SSArray SType -> mapM modelEval l
-
-  Create _ _ _ _ -> error "modelEval of contracts not supported"
-  VarRef _ vt ref -> do
-    model <- ask
-    case lookup (TRef vt SRHS ref) (_mprestate model) of
-      Just (TExp vtyp e') -> case testEquality vt vtyp of
-        Just Refl -> case e' of
-          (LitInt _ i) -> pure i
-          (LitBool _ b) -> pure b
-          (ByLit _ s) -> pure s
-          (Array _ _) -> pure $ fromMaybe (error "modelEval: expected array literal") $ eval e'
-          _ -> error "modelEval: Model did not return a literal"
-        _ -> error "modelEval: Storage Location given does not match type"
-      _ -> error $ "modelEval: Storage Location not found in model" <> show ref
 
   IntEnv _ env     -> do
     model <- ask

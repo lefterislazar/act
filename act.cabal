@@ -74,11 +74,11 @@ library
     Act.Traversals
     Act.Type
     Act.Bounds
-    Act.Equiv
+    -- Act.Equiv
     Act.HEVM_utils
-    Act.Consistency
-    Act.Entailment
-    Act.Overflow
+    -- Act.Consistency
+    -- Act.Entailment
+    -- Act.Overflow
 
 executable act
   import:             common

@@ -644,7 +644,7 @@ declareTRef (TRef typ _ ref) = declareRef typ name ref
     declareRef t@VType n (RMapIdx _ (TRef _ _ r) (TExp et _)) = declareRef (TMapping (ValueType et) (ValueType t)) n r
     declareRef t n (RArrIdx _ r _ b) = declareRef (TArray b t) n r
     declareRef t n (CVar _ _ _) = constant n t
-    declareRef t n (SVar _ _ _ _) = constant n t
+    declareRef t n (SVar _ _ _ _ _) = constant n t
     declareRef t n (RField _ _ _ _) = constant n t
 
 -- | produces an SMT2 expression declaring the given decl as a symbolic constant
@@ -667,13 +667,6 @@ typedExpToSMT2 (TExp typ e) = expToSMT2 (toSType typ) e
 -- | encodes the given Exp as an smt2 expression
 expToSMT2 :: forall (a :: ActType). SType a -> Exp a -> Ctx SMT2
 expToSMT2 typ expr = case expr of
-  -- calls to create can never return the same result
-  -- temproary workaround for lack of contract creation in SMT encoding
-  (Eq _ _ (Address _ _ (Create _ _ _ _)) _) -> pure "false"
-  (Eq _ _ _ (Address _ _ (Create _ _ _ _))) -> pure "false"
-  (NEq _ _ (Address _ _ (Create _ _ _ _)) _) -> pure "true"
-  (NEq _ _ _ (Address _ _(Create _ _ _ _))) -> pure "true"
-  (InRange _ TAddress (Address _ _ (Create _ _ _ _))) -> pure "true"
   -- booleans
   And _ a b -> binop "and" SBoolean SBoolean a b
   Or _ a b -> binop "or" SBoolean SBoolean a b
@@ -725,8 +718,6 @@ expToSMT2 typ expr = case expr of
           defaultConst SStruct = error "TODO"
           defaultConst SMapping = error "TODO"
 
-  -- contracts
-  Create _ _ _ _ -> error "Internal Error: unexpected create call in the SMT expression"
   -- polymorphic
   --  For array comparisons, expands both arrays to their elements and compares elementwise,
   --  as SMT's default array equality requires equality for all possible Int values,
@@ -881,7 +872,7 @@ nameFromTRef (TRef _ _ ref) = nameFromRef ref
 
 nameFromRef :: Ref k -> Id
 nameFromRef (CVar _ _ name) = nameFromVarId name
-nameFromRef (SVar _ whn c name) = c @@ name @@ show whn
+nameFromRef (SVar _ whn r c name) = c @@ name @@ show r @@ show whn
 nameFromRef (RArrIdx _ e _ _) = nameFromRef e
 nameFromRef (RMapIdx _ (TRef _ _ e) _) = nameFromRef e
 nameFromRef (RField _ ref c x) = (nameFromRef ref) @@ c @@ x

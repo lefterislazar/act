@@ -13,7 +13,7 @@
 module Act.Type (typecheck, Err, ErrSrc, Constraint(..), Env(..), Constructors, addCalldata, addPreconds, constraintSource, emptyEnv, addIffs, hasSign, errorSource) where
 
 import Prelude hiding (GT, LT)
-import Data.Maybe (isJust)
+import Data.Maybe (isJust, fromMaybe)
 import Data.Map.Strict    (Map)
 import Data.Bifunctor (first)
 import qualified Data.Map.Strict    as Map
@@ -41,13 +41,19 @@ errorSource source (Failure es) = Failure (fmap (\(p,e) -> (p,(source, e))) es)
 -- | A map containing the definitions off all constructors
 type Constructors = Map Id Constructor
 
+-- | A map containing the definitions off all constructors
+type Transitions = Map Id (Map Id Behaviour)
+
 -- | The type checking environment.
 data Env = Env
   { contract     :: Id                           -- ^ The name of the current contract.
   , storage      :: StorageTyping                -- ^ StorageTyping
   , calldata     :: Map Id ArgType               -- ^ The calldata var names and their types.
+  , retdata      :: Map Id ArgType               -- ^ The calldata var names and their types.
   , constructors :: Constructors                 -- ^ Interfaces and preconditions of constructors
+  , transitions  :: Transitions                 -- ^ Interfaces and preconditions of transitions
   , preconds     :: [Exp ABoolean Untimed]       -- ^ Constraint context
+  , numInters    :: Int                          -- ^ Number of interactions
   }
   deriving (Show, Eq)
 
@@ -56,8 +62,11 @@ emptyEnv = Env
   { contract     = ""
   , storage      = mempty
   , calldata     = mempty
+  , retdata      = mempty
   , constructors = mempty
+  , transitions  = mempty
   , preconds     = []
+  , numInters    = 0
   }
 
 -- | Functions to manipulate environments
@@ -72,6 +81,16 @@ addCalldata decls env = env{ calldata = abiVars }
   where
    abiVars = Map.fromList $ map (\(Arg typ var) -> (var, typ)) decls
 
+-- Add retdata arguments of the current constructor/transition to the environment
+addRetdata :: [Arg] -> Env -> Err Env
+addRetdata rets env@Env{calldata} =
+  foldValidation (\m (Arg typ var) ->
+    case Map.lookup var m of
+      Just _ -> throw (nowhere, "Variable " <> var <> " is already defined")
+      Nothing -> pure (Map.insert var typ m)
+  ) calldata rets `bindValidation` \newCall ->
+  pure env{ calldata = newCall }
+
 -- Add storage typing of a contract to the environment
 addConstrStorage :: Id -> Map Id (ValueType, Integer) -> Env -> Env
 addConstrStorage cid storageTyping env =
@@ -80,13 +99,21 @@ addConstrStorage cid storageTyping env =
 -- Add the whole constructor to the environment. This is needed to typecheck
 -- constructor calls and also later on, to perform the entailment checking.
 addConstructor :: Id -> Constructor -> Env -> Env
-addConstructor cid cnstr env =
-  env { constructors = Map.insert cid cnstr (constructors env) }
+addConstructor cid constr env =
+  env { constructors = Map.insert cid constr (constructors env)  }
+
+addTransition :: Id -> Behaviour -> Env -> Env
+addTransition cid trans env =
+  env { transitions = Map.insert cid (Map.insert (_name trans) trans (fromMaybe Map.empty $ Map.lookup cid $ transitions env)) (transitions env) }
 
 -- Add constructor preconditions to the environment
 addPreconds :: [Exp ABoolean Untimed] -> Env -> Env
 addPreconds pres env =
   env { preconds = pres <> preconds env }
+
+-- Increment the interactions counter
+incrInters :: Env -> Env
+incrInters env = env { numInters = numInters env + 1 }
 
 -- Clear local environment (calldata and preconditions)
 clearLocalEnv :: Env -> Env
@@ -132,19 +159,19 @@ checkContracts' cs = (\(s, tcs, cnstrs) -> (storage s, tcs, cnstrs)) <$> checkCo
 -- | Typecheck a list of contracts
 checkContracts :: Env -> [(U.Contract, FilePath)] -> ErrSrc (Env, [Contract], [Constraint Untimed])
 checkContracts env [] = pure (env, [], [])
-checkContracts env ((U.Contract p cid cnstr behvs, source):cs) =
+checkContracts env ((U.Contract p cid decls cnstr behvs, source):cs) =
     -- Check that the constructor name is not already defined
     errSrc (checkContrName cid env) *>
     -- Add contract name to environment
     let env' = addContractName cid env in
+    (errSrc $ makeStorageTypingFromDecls env decls) `bindValidation` \storageType ->
     -- Check constructor
-    (errorSource source $ checkConstructor env' cnstr) `bindValidation` \(constr', env'', cnstrs1) -> do
+    (errSrc $ checkConstructor env' storageType cnstr) `bindValidation` \(constr', env'', cnstrs1) ->
     -- Check behaviors
-    behvsc <- errSrc $ checkBehaviours env'' behvs
-    -- Check remaining contracts
-    (env''', cs', cnstrs3) <- checkContracts env'' cs
-    pure $ let (behvs', cnstrs2) = behvsc in
-           (env''', (Contract source constr' behvs') : cs', (cnstrSrc <$> cnstrs1 ++ cnstrs2) ++ cnstrs3)
+    (errSrc $ checkBehaviours env'' behvs) `bindValidation` \(behvs', env''', cnstrs2) ->
+      -- Check remaining contracts
+    checkContracts env''' cs `bindValidation` \(env'''', cs', cnstrs3) ->
+    pure (env'''', (Contract source constr' behvs') : cs', (cnstrSrc <$> cnstrs1 ++ cnstrs2) ++ cnstrs3)
     where
         checkContrName :: Id -> Env -> Err ()
         checkContrName cid' Env{constructors} =
@@ -155,35 +182,40 @@ checkContracts env ((U.Contract p cid cnstr behvs, source):cs) =
         errSrc = errorSource source
         cnstrSrc = constraintSource source
 
+-- | Derive storage typing from a list of storage variable declarations
+makeStorageTypingFromDecls :: Env -> [U.StorageVar] -> Err (Map Id (ValueType, Integer))
+makeStorageTypingFromDecls env decls = Map.fromList <$> go decls 0
+  where
+    go :: [U.StorageVar] -> Integer -> Err [(Id,(ValueType, Integer))]
+    go [] _ = pure []
+    go (U.StorageVar p typ@(ValueType vt) name : rest) slot
+      | name == "BALANCE" = throw (p, "BALANCE identifier is reserved")
+      | otherwise         = validSlotType env p vt *> fmap (((:)) (name, (typ, slot))) (go rest (slot+1))
+
 -- | Typecheck a constructor
-checkConstructor :: Env -> U.Constructor -> Err (Constructor, Env, [Constraint Untimed])
-checkConstructor env (U.Constructor p (Interface p' params) payable iffs cases posts _) =
-    -- find constructor name
+checkConstructor :: Env -> Map Id (ValueType, Integer) -> U.Constructor -> Err (Constructor, Env, [Constraint Untimed])
+checkConstructor env storageType (U.Constructor p (Interface p' params) payable (U.Block iffs cases) posts _) =
     let cid = contract env
-    -- add parameters to environment
-        env' = addCalldata params env in
+        env' = addCalldata params env
+        env'' = addConstrStorage cid storageType env' in
     -- check that parameter types are valid
-    traverse_ (checkParams env) params *>
+    traverse_ (checkParams env'') params *>
     -- check preconditions and add implicit CALLVALUE == 0 precondition if not payable
-    -- check preconditions and add implicit CALLVALUE == 0 precondition if not payable
-    
-    -- check preconditions and add implicit CALLVALUE == 0 precondition if not payable
-    checkPreconditions env' (addCallvalueZeroPrecond payable iffs) `bindValidation` \(iffs', cnstr1, env'') ->    --
-    -- check postconditions
-    (checkConstrCases env'' (initBalance payable (adjustCasePosn p cases))) `bindValidation` \(storageType, cases', cnstr2) -> do
-    -- Check if payable constructor has BALANCE declared (in non-payable constructor we add it implicitly)
-    balanaceDeclared p storageType
-    -- construct the new environment
-    let env''' = addConstrStorage cid storageType env''
+    -- checkPreconditions env' (addCallvalueZeroPrecond payable iffs) `bindValidation` \(iffs', cnstr1, env'') ->
+    checkBlock env'' Nothing (U.Block (addCallvalueZeroPrecond payable iffs) cases) `bindValidation` \(block', cnstr1, env''') ->
+    -- add storage typing to environment so cases can reference storage vars
+    -- check if payable constructor has BALANCE declared
+    (if payable == Payable then balanaceDeclared p storageType else pure ()) *>
+    do-- check cases
+    -- (unzip <$> traverse (checkCase env''' Nothing) (adjustCasePosn p cases)) `bindValidation` \(cases', cnstr2) -> do
     -- check case consistency
-    let casecnstrs = checkCaseConsistency env' cases'
+    -- let casecnstrs = checkCaseConsistency env' cases'
     -- check postconditions
     ensures <- map fst <$> traverse (checkExpr env''' U TBoolean) posts
-    -- Note: ivariants are ignored for the time being and not checked
-    pure $ let constr = Constructor p cid (Interface p' params) payable iffs' cases' ensures []
-               -- add the constructor to the environment
+    -- Note: invariants are ignored for the time being and not checked
+    pure $ let constr = Constructor p cid (Interface p' params) payable block' ensures []
                env'''' = addConstructor cid constr env'''
-           in(constr, clearLocalEnv env'''', cnstr1 ++ cnstr2 ++ casecnstrs)
+           in (constr, clearLocalEnv env'''', cnstr1)
 
 balanaceDeclared :: Pn -> Map Id (ValueType, Integer) -> Err ()
 balanaceDeclared p storageTyping =
@@ -210,6 +242,7 @@ checkParams Env{storage} (Arg (ContractArg p c) _) =
 -- TODO check that abi types are valid
 checkParams _ _ = pure ()
 
+{-
 -- | Type check each case of a constructor
 checkConstrCases :: Env -> [U.Case U.Creates]
                  -> Err (Map Id (ValueType, Integer), Cases [StorageUpdate], [Constraint Untimed])
@@ -288,96 +321,161 @@ checkConstrCases env cases = do
         let typing' = makeStorageTyping assigns 0 in
         consistentStorageTyping typing cases' *>
         assert (p, "Inconsistent storage typing in constructor cases") (typing == typing')
-
+-}
 
 -- | Type check a list of transitions
-checkBehaviours :: Env -> [U.Transition] -> Err ([Behaviour], [Constraint Untimed])
-checkBehaviours _ [] = pure ([], [])
-checkBehaviours env (b:bhs) = do
+checkBehaviours :: Env -> [U.Transition] -> Err ([Behaviour], Env, [Constraint Untimed])
+checkBehaviours env [] = pure ([], env, [])
+checkBehaviours env (b:bhs) =
     -- check that there are no duplicate transition names
-    checkBehvName b bhs
+    checkBehvName b bhs *>
     -- check individual transition
-    b' <- checkBehaviour env b
-    -- check remaining transitions
-    bs' <- checkBehaviours env bhs
-    pure $ let (tbehv, bcnstrs) = b'
-               (tbs, bscnstrs) = bs' in
-            (tbehv:tbs, bcnstrs ++ bscnstrs)
-
+    checkBehaviour env b `bindValidation` \(tbehv, env', bcnstrs) -> do
+      -- check remaining transitions
+      bs' <- checkBehaviours env' bhs
+      pure $ let (tbs, env'', bscnstrs) = bs' in
+              (tbehv:tbs, env'', bcnstrs ++ bscnstrs)
     where
         checkBehvName :: U.Transition -> [U.Transition] -> Err ()
-        checkBehvName (U.Transition pn name _ _ _ _ _ _) bhs' =
-            case find (\(U.Transition _ n _ _ _ _ _ _) -> n == name) bhs' of
+        checkBehvName (U.Transition pn name _ _ _ _ _) bhs' =
+            case find (\(U.Transition _ n _ _ _ _ _) -> n == name) bhs' of
                 Just _ -> throw (pn, "Transition " <> name <> "for contract " <> contract env <> " is already defined")
-                Nothing -> if (name == contract env) then throw (pn, "Transition cannot have the same name as contract") else pure()
+                Nothing -> if (name == contract env) then throw (pn, "Transition cannot have the same name as contract") else pure ()
 
 -- | Type check a single transition
-checkBehaviour :: Env -> U.Transition -> Err (Behaviour, [Constraint Untimed])
-checkBehaviour env@Env{contract} (U.Transition p name iface@(Interface _ params) payable rettype iffs cases posts) =
+checkBehaviour :: Env -> U.Transition -> Err (Behaviour, Env, [Constraint Untimed])
+checkBehaviour env@Env{contract} (U.Transition p name iface@(Interface _ params) payable rettype (U.Block iffs cases) posts) =
     -- add parameters to environment
     let env' = addCalldata params env in
     -- check that parameter types are valid
     traverse_ (checkParams env) params *>
     -- check preconditions
-    checkPreconditions env' (addCallvalueZeroPrecond payable iffs) `bindValidation` \(iffs', cnstr1, env'') -> do
-    -- check cases
-    casesc <- unzip <$> traverse (checkBehvCase env'' (argToValueType <$> rettype)) (adjustCasePosn p cases)
+    -- checkPreconditions env' (addCallvalueZeroPrecond payable iffs) `bindValidation` \(iffs', cnstr1, env'') -> do
+    checkBlock env' (argToValueType <$> rettype) (U.Block (addCallvalueZeroPrecond payable iffs) cases) `bindValidation` \(block', cnstr1, env'') -> do
     -- check postconditions
     ensures <- map fst <$> traverse (checkExpr env'' T TBoolean) posts
     -- return the behaviour
-    pure $ let (cases', cnstrs2) = casesc
-               -- check case consistency
-               casecnstrs = checkCaseConsistency env' cases'
-           in  (Behaviour p name contract iface payable iffs' cases' ensures, cnstr1 ++ concat cnstrs2 ++ casecnstrs)
+    pure $ let trans = Behaviour p name contract iface payable block' ensures
+               env''' = addTransition contract trans env''
+           in  (trans, env''', cnstr1)
 
-adjustCasePosn :: Pn -> [U.Case a] -> [U.Case a]
+adjustCasePosn :: Pn -> [U.Case] -> [U.Case]
 adjustCasePosn p cases =
     map adjust cases
   where
     adjust (U.Case p' cond updates) = U.Case (if p' == nowhere then p else p') cond updates
 
+checkBlock :: Env -> Maybe ValueType -> U.Block -> Err (Block Untimed, [Constraint Untimed], Env)
+checkBlock env rettype (U.Block iff cases) =
+  -- check preconditions
+  checkPreconditions env iff `bindValidation` \(iffs', cnstr1, env') -> do
+  -- check cases
+  casesc <- unzip <$> traverse (checkCase env' rettype) cases -- TODO: why was this here? (adjustCasePosn p cases)
+  pure $ let (cases', cnstrs2) = casesc
+             -- check case consistency
+             casecnstrs = checkCaseConsistency env' cases'
+         in  (Block iffs' cases', cnstr1 ++ concat cnstrs2 ++ casecnstrs, env')
+
 -- | Type check a single case of a behaviour
-checkBehvCase :: Env -> Maybe ValueType -> U.Case (U.StorageUpdates, Maybe U.Expr)
-              -> Err (Bcase Untimed, [Constraint Untimed])
-checkBehvCase env rettype (U.Case p cond (updates, mret)) =
+checkCase :: Env -> Maybe ValueType -> U.Case
+              -> Err (Case, [Constraint Untimed])
+checkCase env rettype (U.Case p cond effects) =
     -- check case condition
     checkExpr env U TBoolean cond `bindValidation` \(cond', cnstr1) ->
     -- add case condition to environment preconditions
     let env' = addPreconds [cond'] env in
-    -- check storage updates
-    (unzip <$> traverse (checkStorageUpdate env') updates) `bindValidation` \(tupdates, cnstr2) -> do
-    -- check that storage updates are ordered from least to most specific
-    checkOrderedUpdates tupdates
-    -- check return expression if any
+    -- check effects
+    checkEffects env' rettype effects `bindValidation` \(effects', cnstr2) -> do
+    pure (Case p cond' effects', cnstr1 ++ cnstr2)
+
+checkEffects :: Env -> Maybe ValueType -> U.Effects -> Err (Effects Untimed, [Constraint Untimed])
+checkEffects env rettype (U.LocalOnly updates mret) =
+    (unzip <$> traverse (checkStorageUpdate env) updates) `bindValidation` \(tupdates, cnstr1) -> do
     res <- case (rettype, mret) of
         (Nothing, Nothing) -> pure Nothing
-        (Just (ValueType t), Just e)  ->  Just . first (TExp t) <$> checkExpr env' U t e
-        (Nothing, Just _)  -> throw (p, "Transition does not return a value, but return expression provided")
-        (Just _, Nothing)  -> throw (p, "Transition must return a value, but no return expression provided")
-
-    pure $ let (mret', cnstr3) = case res of
+        (Just (ValueType t), Just e)  ->  Just . first (TExp t) <$> checkExpr env U t e
+        (Nothing, Just _)  -> throw (nowhere, "Transition does not return a value, but return expression provided") -- TODO: add position here somehow..
+        (Just _, Nothing)  -> throw (nowhere, "Transition must return a value, but no return expression provided")
+    checkOrderedUpdates tupdates
+    pure $ let (mret', cnstr2) = case res of
                   Just (e, cs) -> (Just e, cs)
                   Nothing -> (Nothing, [])
-            in (Case p cond' (tupdates, mret'), cnstr1 ++ concat cnstr2 ++ cnstr3)
-    where
-        checkOrderedUpdates :: [StorageUpdate] -> Err ()
-        checkOrderedUpdates [] = pure ()
-        checkOrderedUpdates ((Update _ ref _):upds) =
-            (assert (orderErr $ posnFromRef ref) $ not (any (leRef ref . getRef) upds)) *>
-            checkOrderedUpdates upds
+            in (LocalOnly tupdates mret', concat cnstr1 ++ cnstr2)
+checkEffects env rettype (U.LocalAndInteraction updates interaction block') = do 
+    (unzip <$> traverse (checkStorageUpdate env) updates) `bindValidation` \(tupdates, cnstr1) -> do
+      checkOrderedUpdates tupdates *>
+        checkInteraction env interaction `bindValidation` \(interaction', cnstr2, env'') -> do
+        checkBlock (incrInters env'') rettype block' `bindValidation` \(block'', cnstr3, env''') -> do
+          pure (LocalAndInteraction tupdates interaction' block'', concat cnstr1 ++ cnstr2 ++ cnstr3)
 
-        orderErr p' = (p', "Storage updates must be listed from the least to most specific")
+checkInteraction :: Env -> U.Interaction -> Err (Interaction Untimed, [Constraint Untimed], Env)
+checkInteraction env (U.CallI p static calle fun args callvalue retVars) =
+  inferExpr env U calle `bindValidation` \(TExp t calle', cnstr0) ->
+    case t of
+      TContract c -> do
+        case Map.lookup c (transitions env) of
+          Just transs -> 
+            case Map.lookup fun transs of
+              Just trans -> do
+                let sig = map (\(Arg typ _) -> typ) (case _interface trans of Interface _ as -> as)
+                    payable = _isPayable trans
+                cvc <- case (payable, callvalue) of
+                        (NonPayable, Just _) -> throw (p, "Constructor " <> show c <> " is not payable, but call value provided")
+                        (Payable, Just cvExpr) -> first Just <$> checkExpr env U (TInteger 256 Unsigned) cvExpr
+                        (NonPayable, Nothing)    -> pure (Nothing, [])
+                        (Payable, Nothing)     -> pure (Just $ LitInt nowhere 0, [])
+                argsc <- checkArgs env U p (argToValueType <$> sig) args
+                env' <- addRetdata retArgs env -- TODO: Maybe more specific contract type..
+                pure $ let (args', cnstr1) = argsc
+                           (cv, cnstr2) = cvc
+                           callcnstr = CallCnstr p "" msg env args' cv c
+                           msg = "Preconditions of transition call to " <> show c <> " are not guaranteed to hold"
+                           -- env' = 
+                        in (TypedCallI p static calle' fun args' cv retVars, callcnstr : cnstr0 ++ cnstr1 ++ cnstr2 , env')
+              Nothing -> throw (p, "Contract " <> c <> "does not implement " <> fun)
+          Nothing -> throw (p, "Unknown contract type: " <> c)
+      _ -> throw (p, "Call with non-callable type: " <> prettyTValueType t)
+  where retArgs = maybe [] (\(Interface _ decls) -> decls) retVars
+checkInteraction env@Env{constructors}  (U.CreateI p retVar c args callvalue) =
+  case Map.lookup c constructors of
+    Just cnstr -> do
+        let sig = map (\(Arg typ _) -> typ) (case _cinterface cnstr of Interface _ as -> as)
+            payable = _cisPayable cnstr
+        cvc <- case (payable, callvalue) of
+                (NonPayable, Just _) -> throw (p, "Constructor " <> show c <> " is not payable, but call value provided")
+                (Payable, Just cvExpr) -> first Just <$> checkExpr env U (TInteger 256 Unsigned) cvExpr
+                (NonPayable, Nothing)    -> pure (Nothing, [])
+                (Payable, Nothing)     -> pure (Just $ LitInt nowhere 0, [])
+        argsc <- checkArgs env U p (argToValueType <$> sig) args
+        env' <- addRetdata [(Arg (AbiArg AbiAddressType) retVar)] env -- TODO: Maybe more specific contract type..
+        pure $ let (args', cnstr1) = argsc
+                   (cv, cnstr2) = cvc
+                   callcnstr = CallCnstr p "" msg env args' cv c
+                   msg = "Preconditions of constructor call to " <> show c <> " are not guaranteed to hold"
+                   -- env' = 
+                in (CreateI p retVar c args' cv, callcnstr : cnstr1 ++ cnstr2, env')
+    Nothing -> throw (p, "Unknown constructor " <> show c)
 
-        getRef :: StorageUpdate -> Ref LHS Untimed
-        getRef (Update _ ref _) = ref
+checkOrderedUpdates :: [StorageUpdate] -> Err ()
+checkOrderedUpdates [] = pure ()
+checkOrderedUpdates ((Update _ ref _):upds) =
+  (assert (orderErr $ posnFromRef ref) $ not (any (leRef ref . getRef) upds)) *>
+  checkOrderedUpdates upds
+  where
 
-        leRef :: Ref LHS Untimed -> Ref LHS Untimed -> Bool
-        leRef r1 r2 = r1 == r2 || ltRef r1 r2
+    orderErr p' = (p', "Storage updates must be listed from the least to most specific")
 
-        ltRef :: Ref LHS Untimed -> Ref LHS Untimed -> Bool
-        ltRef (RField _ r1 _ _) r2 = r1 == r2 || ltRef r1 r2
-        ltRef (RArrIdx _ r1 _ _ ) r2 = r1 == r2 || ltRef r1 r2
-        ltRef (SVar _ _ _ _) _ = False
+    getRef :: StorageUpdate -> Ref LHS Untimed
+    getRef (Update _ ref' _) = ref'
+
+    leRef :: Ref LHS Untimed -> Ref LHS Untimed -> Bool
+    leRef r1 r2 = r1 == r2 || ltRef r1 r2
+
+    ltRef :: Ref LHS Untimed -> Ref LHS Untimed -> Bool
+    ltRef (RField _ r1 _ _) r2 = r1 == r2 || ltRef r1 r2
+    ltRef (RArrIdx _ r1 _ _ ) r2 = r1 == r2 || ltRef r1 r2
+    ltRef (SVar _ _ _ _ _) _ = False
+
 
 -- | Check a list of preconditions one by one and add each one of them to the environment before checking the next
 checkPreconditions :: Env -> [U.Expr] -> Err ([Exp ABoolean Untimed], [Constraint Untimed], Env)
@@ -419,6 +517,7 @@ addCallvalueZeroPrecond NonPayable iffs =
     (U.EEq nowhere (U.EnvExp nowhere Callvalue) (U.IntLit nowhere 0)) : iffs
 
 
+{-
 -- | Implicitly add uint256 BALANCE if the constructor is not payable
 initBalance :: IsPayable -> [U.Case U.Creates] -> [U.Case U.Creates]
 initBalance Payable cases = cases
@@ -439,9 +538,10 @@ initBalance NonPayable cases =
     hasBalanceField [] = False
     hasBalanceField ((U.StorageVar _ _ name, _):rest) =
         (name == "BALANCE") || hasBalanceField rest
+        -}
 
 -- | Check that case conditions in a case block are mutually exclusive and exhaustive
-checkCaseConsistency :: Env -> Cases a -> [Constraint Untimed]
+checkCaseConsistency :: Env -> [Case] -> [Constraint Untimed]
 checkCaseConsistency env cases =
     [ BoolCnstr getCasePos "" "Cases are not mutually exclusive" env (mkNonoverlapAssertion conds)
     , BoolCnstr getCasePos "" "Cases are not exhaustive" env (mkExhaustiveAssertion conds)
@@ -462,6 +562,7 @@ checkCaseConsistency env cases =
         mkExhaustiveAssertion :: [Exp ABoolean Untimed] -> Exp ABoolean Untimed
         mkExhaustiveAssertion caseconds = mkOr caseconds
 
+{-
 -- | Type check initial storage assignment
 checkAssign :: Env -> U.Assign -> Err (StorageUpdate, [Constraint Untimed])
 checkAssign env (U.StorageVar p (ValueType typ) var, expr) = do
@@ -470,6 +571,7 @@ checkAssign env (U.StorageVar p (ValueType typ) var, expr) = do
     -- check the RHS expression
     (expr', cnstr) <- checkExpr env U typ expr
     pure (Update typ (SVar p Neither (contract env) (var)) expr', cnstr)
+-}
 
 -- | Check that a type is a valid slot type
 validSlotType :: Env -> Pn -> TValueType a -> Err ()
@@ -522,7 +624,8 @@ checkStorageUpdate env (U.Update ref expr) =
 -- | Type check a variable reference
 checkRef :: forall t k. Env -> SRefKind k -> Mode t -> U.Ref -> Err (ValueType, Ref k t, [Constraint t])
 -- Single variable reference
-checkRef Env{contract, calldata, storage} kind mode (U.RVar p tag name) =
+checkRef Env{contract, calldata, storage, numInters} kind mode (U.RVar p resettag tag name) =
+    let resettag' = fromMaybe numInters resettag in
     case Map.lookup name calldata of
       -- calldata variable
       Just typ -> case kind of
@@ -533,9 +636,9 @@ checkRef Env{contract, calldata, storage} kind mode (U.RVar p tag name) =
         Just storageTyping -> case Map.lookup name storageTyping of
             Just (typ, _) ->
                 case (tag, mode) of
-                    (U.Neither, U) -> pure (typ, SVar p Neither contract name, [])
-                    (U.Pre, T)     -> pure (typ, SVar p Pre contract name, [])
-                    (U.Post, T)    -> pure (typ, SVar p Post contract name, [])
+                    (U.Neither, U) -> pure (typ, SVar p Neither resettag' contract name, [])
+                    (U.Pre, T)     -> pure (typ, SVar p Pre resettag' contract name, [])
+                    (U.Post, T)    -> pure (typ, SVar p Post resettag' contract name, [])
                     _              -> throw (p, "Mismatched timing for storage variable " <> show name <> ": declared " <> show tag <> ", used in " <> show mode)
             Nothing -> throw (p, "Unbound variable " <> show name)
         Nothing -> throw (p, "Unbound variable " <> show name) -- accessing storage variable not yet created
@@ -782,23 +885,6 @@ inferExpr env@Env{constructors} mode e = case e of
       checkElement :: TValueType a -> TypedExp t -> Err (Exp a t)
       checkElement t (TExp t' te) = maybe (typeMismatchErr (posnFromExp te) t t') (\Refl -> pure te) $ relaxedtestEquality t t'
 
-  -- Constructor calls
-  U.ECreate p c args callvalue -> case Map.lookup c constructors of
-    Just cnstr -> do
-        let sig = map (\(Arg typ _) -> typ) (case _cinterface cnstr of Interface _ as -> as)
-            payable = _cisPayable cnstr
-        cvc <- case (payable, callvalue) of
-                (NonPayable, Just _) -> throw (p, "Constructor " <> show c <> " is not payable, but call value provided")
-                (Payable, Just cvExpr) -> first Just <$> checkExpr env mode (TInteger 256 Unsigned) cvExpr
-                (NonPayable, Nothing)    -> pure (Nothing, [])
-                (Payable, Nothing)     -> pure (Just $ LitInt nowhere 0, [])
-        argsc <- checkArgs env mode p (argToValueType <$> sig) args
-        pure $ let (args', cnstr1) = argsc
-                   (cv, cnstr2) = cvc
-                   callcnstr = CallCnstr p "" msg env args' cv c
-                   msg = "Preconditions of constructor call to " <> show c <> " are not guaranteed to hold"
-                in (TExp (TContract c) (Create p c args' cv), callcnstr:cnstr1 ++ cnstr2)
-    Nothing -> throw (p, "Unknown constructor " <> show c)
   -- Control
   U.EITE p e1 e2 e3 ->
     ((,,) <$> (checkExpr env mode TBoolean e1) <*> (inferExpr env mode e2) <*> (inferExpr env mode e3))

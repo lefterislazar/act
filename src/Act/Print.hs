@@ -29,23 +29,29 @@ prettyContract :: Contract t -> String
 prettyContract (Contract _ ctor behvs) = unlines $ intersperse "\n" $ (prettyCtor ctor):(fmap prettyBehaviour behvs)
 
 prettyCtor :: Constructor t -> String
-prettyCtor (Constructor _ name interface _ pres cases posts invs)
+prettyCtor (Constructor _ name interface _ block' posts invs)
   =   "constructor of " <> name
   >-< "interface " <> show interface
-  <> prettyPre pres
-  <> prettyCreates cases
+  -- <> prettyPre pres
+  -- <> prettyCreates cases
+  <> show block'
   <> prettyPost posts
   <> prettyInvs invs
   where
-    prettyCreates [] = ""
-    prettyCreates cs = header "creates" >-< block (concatMap (\(Case _ cond updates) -> prettyExp cond : map prettyUpdate' updates) cs)
+    -- prettyCreates [] = ""
+    -- prettyCreates cs = header "creates" >-< block (concatMap (\(Case _ cond effects) -> prettyExp cond : [prettyEffects effects]) cs)
 
     prettyInvs [] = ""
     prettyInvs _ = error "TODO: pretty print invariants"
 
+{-
     prettyUpdate' :: StorageUpdate t -> String
     prettyUpdate' (Update v r e) = prettyTValueType v <> " " <> prettyRef r <> " := " <> prettyExp e
-    
+    -}
+
+prettyEffects :: Effects t -> String
+prettyEffects = show -- TODO
+
 prettyTValueType :: TValueType a -> String
 prettyTValueType (TContract n) = n
 prettyTValueType TUnboundedInt = "integer"
@@ -57,21 +63,22 @@ prettyValueType :: ValueType -> String
 prettyValueType (ValueType t) = prettyTValueType t
 
 prettyBehaviour :: Behaviour t -> String
-prettyBehaviour (Behaviour _ name contract interface _ preconditions cases postconditions)
+prettyBehaviour (Behaviour _ name contract interface _ block' postconditions)
   =   "behaviour " <> name <> " of " <> contract
   >-< "interface " <> (show interface)
-  <> prettyPre preconditions
-  <> prettyCases' cases
+  -- <> prettyPre preconditions
+  -- <> prettyCases' cases
+  <> show block'
   <> prettyPost postconditions
+  {-
   where
     prettyCases' [] = ""
     prettyCases' cs = header "cases" >-< block (concatMap prettyCase cs)
-    
-    prettyCase (Case _ cond (updates, mret)) = 
-      [prettyExp cond <> ":"] 
-      ++ map (("  " <>) . prettyUpdate) updates
-      ++ maybe [] (\ret -> ["  returns " <> prettyTypedExp ret]) mret
 
+    prettyCase (Case _ cond effects) =
+      (prettyExp cond <> ":") : [(("  " <>) . prettyEffects) effects]
+      -- ++ maybe [] (\ret -> ["  returns " <> prettyTypedExp ret]) mret
+-}
 
 
 prettyPre :: [Exp ABoolean t] -> String
@@ -133,9 +140,6 @@ prettyExp e = case e of
   Array _ l ->
     "[" <> (intercalate "," $ fmap prettyExp l) <> "]"
 
-  -- contracts
-  Create _ f ixs _ -> f <> "(" <> (intercalate "," $ fmap prettyTypedExp ixs) <> ")"
-
   --polymorphic
   ITE _ a b c -> "(if " <> prettyExp a <> " then " <> prettyExp b <> " else " <> prettyExp c <> ")"
   VarRef _ _ r -> prettyRef r
@@ -144,14 +148,14 @@ prettyExp e = case e of
   MappingUpd _ r _ _ kvs -> prettyRef r <> "{" <> intercalate ", " (map (\(k,v) -> prettyExp k <> " => " <> prettyExp v) kvs) <> "}"
   where
     print2 sym a b = "(" <> prettyExp a <> " " <> sym <> " " <> prettyExp b <> ")"
-    
+
 prettyTypedExp :: TypedExp t -> String
 prettyTypedExp (TExp _ e) = prettyExp e
 
 prettyRef :: Ref k t -> String
 prettyRef = \case
   CVar _ _ n -> n
-  SVar _ t _ n -> timeParens t n
+  SVar _ t r _ n -> timeParens t (show r <> "." <> n)
   RArrIdx _ r arg _ -> prettyRef r <> brackets (prettyExp arg)
   RMapIdx _ r arg -> prettyTypedRef r <> brackets (prettyTypedExp arg)
   RField _ r _ n -> prettyRef r <> "." <> n
@@ -187,7 +191,7 @@ prettyInvPred = prettyExp . untime . (\(PredTimed e _) -> e)
     untimeTypedRef (TRef t k r) = TRef t k (untimeRef r)
 
     untimeRef:: Ref k t -> Ref k Untimed
-    untimeRef (SVar p _ c a) = SVar p Neither c a
+    untimeRef (SVar p _ r c a) = SVar p Neither r c a
     untimeRef (CVar p c a) = CVar p c a
     untimeRef (RArrIdx p e x n) = RArrIdx p (untimeRef e) (untime x) n
     untimeRef (RMapIdx p e x) = RMapIdx p (untimeTypedRef e) (untimeTyped x)
@@ -222,7 +226,6 @@ prettyInvPred = prettyExp . untime . (\(PredTimed e _) -> e)
       InRange p a b -> InRange p a (untime b)
       LitBool p a -> LitBool p a
       Array p l -> Array p (fmap untime l)
-      Create p f xs v -> Create p f (fmap untimeTyped xs) (fmap untime v)
       IntEnv p a  -> IntEnv p a
       ByEnv p a   -> ByEnv p a
       ITE p x y z -> ITE p (untime x) (untime y) (untime z)

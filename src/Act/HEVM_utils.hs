@@ -32,7 +32,7 @@ import EVM.Solvers
 import qualified EVM.Format as Format
 import qualified EVM.Fetch as Fetch
 import qualified EVM
-import EVM.FeeSchedule (feeSchedule)
+import EVM.FeeSchedule (feeSchedule, FeeSchedule(..))
 import EVM.Effects
 import EVM.ABI
 import EVM.Format
@@ -212,10 +212,12 @@ loadSymVM (entryaddr, entrycontract) othercontracts callvalue cd create fresh =
      , schedule = feeSchedule
      , chainId = 1
      , create = create
+     , parentHash = 0
      , txAccessList = mempty
      , allowFFI = False
      , freshAddresses = fresh
      , beaconRoot = 0
+     , txdataFloorGas = feeSchedule.g_transaction
      })
 
 

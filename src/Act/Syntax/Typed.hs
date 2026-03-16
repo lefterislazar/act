@@ -92,25 +92,40 @@ data InvariantPred (t :: Timing) where
 deriving instance Show (InvariantPred t)
 deriving instance Eq (InvariantPred t)
 
-data Case a t = Case Pn (Exp ABoolean t) a
-deriving instance (Show a) => Show (Case a t)
+-- | Typed external interaction: a call to unknown code or a contract creation.
+data Interaction t
+  = TypedCallI   Pn Bool (Exp AContract t) Id [TypedExp t] (Maybe (Exp AInteger t)) (Maybe Interface)
+  | UntypedCallI   Pn Bool (Exp AInteger t) Id [TypedExp t] (Maybe (Exp AInteger t)) (Maybe Interface)
+  | CreateI Pn Id   Id               [TypedExp t]    (Maybe (Exp AInteger t))
+deriving instance Show (Interaction t)
+deriving instance Eq   (Interaction t)
 
-instance (Eq a) => Eq (Case a t) where
-  (==) :: Case a t -> Case a t -> Bool
-  Case _ c1 b1 == Case _ c2 b2 = c1 == c2 && b1 == b2
+-- | Effects of a case. Either a local update (with optional return value) or
+--   local updates followed by external interactions and a continuation block.
+--   Mutually recursive with 'Block' and 'Case'.
+data Effects t
+  = LocalOnly           [StorageUpdate t] (Maybe (TypedExp t))
+  | LocalAndInteraction [StorageUpdate t] (Interaction t) (Block t)
+deriving instance Show (Effects t)
+deriving instance Eq   (Effects t)
 
-type Ccase t = Case [StorageUpdate t] t
-type Bcase t = Case ([StorageUpdate t], Maybe (TypedExp t)) t
+-- | A case: a condition guarding a set of effects.
+data Case t = Case Pn (Exp ABoolean t) (Effects t)
+deriving instance Show (Case t)
+deriving instance Eq   (Case t)
 
-type Cases a t = [Case a t]
+-- | A continuation block: fresh preconditions followed by cases.
+data Block t = Block [Exp ABoolean t] [Case t]
+deriving instance Show (Block t)
+deriving instance Eq   (Block t)
 
 data Constructor t = Constructor
-  { _cpos :: Pn 
+  { _cpos :: Pn
   , _cname :: Id
   , _cinterface :: Interface
   , _cisPayable :: IsPayable
-  , _cpreconditions :: [Exp ABoolean t]
-  , _ccases :: Cases [StorageUpdate t] t
+  -- , _cpreconditions :: [Exp ABoolean t]
+  , _cblock :: Block t
   , _cpostconditions :: [Exp ABoolean t]
   , _invariants :: [Invariant t]
   } deriving (Show, Eq)
@@ -123,8 +138,9 @@ data Behaviour t = Behaviour
   , _contract :: Id
   , _interface :: Interface
   , _isPayable :: IsPayable
-  , _preconditions :: [Exp ABoolean t]  -- if preconditions are not satisfied execution is reverted
-  , _cases :: Cases ([StorageUpdate t], Maybe (TypedExp t)) t
+  -- , _preconditions :: [Exp ABoolean t]  -- if preconditions are not satisfied execution is reverted
+  -- , _cases :: [Case t]
+  , _block :: Block t
   , _postconditions :: [Exp ABoolean Timed]
   } deriving (Show, Eq)
 
@@ -181,7 +197,7 @@ eqTypeKind fa fb = maybe False (\Refl ->
 -- | Variable References
 data Ref (k :: RefKind) (t :: Timing) where
   CVar :: Pn -> ArgType -> Id -> Ref RHS t               -- Calldata variable
-  SVar :: Pn -> Time t -> Id -> Id -> Ref k t            -- Storage variable. First `Id` is the contract the var belongs to and the second the name.
+  SVar :: Pn -> Time t -> Int -> Id -> Id -> Ref k t     -- Storage variable. First `Id` is the contract the var belongs to and the second the name.
   RArrIdx :: Pn -> Ref k t -> Exp AInteger t -> Int -> Ref k t
                                                          -- Array access. `Int` in indices list stores the corresponding index upper bound
   RMapIdx :: Pn -> TypedRef t -> TypedExp t -> Ref RHS t
@@ -191,7 +207,7 @@ deriving instance Show (Ref k t)
 
 instance Eq (Ref k t) where
   CVar _ at x         == CVar _ at' x'          = at == at' && x == x'
-  SVar _ t c x        == SVar _ t' c' x'        = t == t' && c == c' && x == x'
+  SVar _ t i c x        == SVar _ t' i' c' x'   = t == t' && i == i' && c == c' && x == x'
   RArrIdx _ r t ix    == RArrIdx _ r' t' ix'    = r == r' && t == t' && ix == ix'
   RMapIdx _ r ix      == RMapIdx _ r' ix'       = r == r' &&  ix == ix'
   RField _ r c x      == RField _ r' c' x'      = r == r' && c == c' && x == x'
@@ -202,7 +218,7 @@ data TypedRef (t :: Timing) where
 deriving instance Show (TypedRef t)
 
 refToRHS :: Ref k t -> Ref RHS t
-refToRHS (SVar p t i ci) = SVar p t i ci
+refToRHS (SVar p t r i ci) = SVar p t r i ci
 refToRHS (CVar p t i) = CVar p t i
 refToRHS (RMapIdx p r i) = RMapIdx p r i
 refToRHS (RArrIdx p r i n) = RArrIdx p (refToRHS r) i n
@@ -264,8 +280,6 @@ data Exp (a :: ActType) (t :: Timing) where
   ByEnv :: Pn -> EthEnv -> Exp AByteStr t
 
   Array :: Pn -> [Exp a t] -> Exp (AArray a) t
-  -- contracts
-  Create   :: Pn -> Id -> [TypedExp t] -> Maybe (Exp AInteger t) -> Exp AContract t
   -- polymorphic
   Eq  :: Pn -> TValueType a -> Exp a t -> Exp a t -> Exp ABoolean t
   NEq :: Pn -> TValueType a -> Exp a t -> Exp a t -> Exp ABoolean t
@@ -319,7 +333,6 @@ instance Eq (Exp a t) where
 
   ITE _ a b c == ITE _ d e f = a == d && b == e && c == f
   VarRef _ a t == VarRef _ b u = a == b && t == u
-  Create _ a b c == Create _ d e f = a == d && b == e && c == f
   Array _ a == Array _ b = a == b
   Address _ _ a == Address _ _ b = a == b
   Mapping _ (vt1@VType :: TValueType a1) (vt2@VType :: TValueType b1) m == Mapping _ (vt3@VType :: TValueType a2) (vt4@VType :: TValueType b2) m' =
@@ -381,8 +394,6 @@ instance Timable (Exp a) where
     ByStr p x -> ByStr p x
     ByLit p x -> ByLit p x
     ByEnv p x -> ByEnv p x
-    -- contracts
-    Create p x y z -> Create p x (go <$> y) (go <$> z)
 
     -- polymorphic
     Eq  p s x y -> Eq p s (go x) (go y)
@@ -407,8 +418,18 @@ instance Timable (Ref k) where
   setTime time (RMapIdx p e ix) = RMapIdx p (setTime time e) (setTime time ix)
   setTime time (RArrIdx p e ix n) = RArrIdx p (setTime time e) (setTime time ix) n
   setTime time (RField p e c x) = RField p (setTime time e) c x
-  setTime time (SVar p _ c ref) = SVar p time c ref
+  setTime time (SVar p _ r c ref) = SVar p time r c ref
   setTime _ (CVar p at ref) = CVar p at ref
+
+-- TODO: check why this is necessary
+instance Timable Interaction where
+  setTime :: When -> Interaction Untimed -> Interaction Timed
+  setTime time (TypedCallI p s addr fn args mv iface) =
+    TypedCallI p s (setTime time addr) fn (setTime time <$> args) (setTime time <$> mv) iface
+  setTime time (UntypedCallI p s addr fn args mv iface) =
+    UntypedCallI p s (setTime time addr) fn (setTime time <$> args) (setTime time <$> mv) iface
+  setTime time (CreateI p r c args mv) =
+    CreateI p r c (setTime time <$> args) (setTime time <$> mv)
 
 
 ------------------------
@@ -436,23 +457,61 @@ instance ToJSON (Constructor t) where
   toJSON Constructor{..} = object [ "kind" .= String "Constructor"
                                   , "contract" .= _cname
                                   , "interface" .= toJSON _cinterface
-                                  , "preConditions" .= toJSON _cpreconditions
+                                  , "block" .= toJSON _cblock
                                   , "postConditions" .= toJSON _cpostconditions
-                                  , "invariants" .= listValue toJSON _invariants
-                                  , "cases" .= toJSON _ccases  ]
+                                  , "invariants" .= listValue toJSON _invariants ]
+                                  --, "cases" .= toJSON _ccases  ]
 
 instance ToJSON (Behaviour t) where
   toJSON Behaviour{..} = object [ "kind" .= String "Behaviour"
                                 , "name" .= _name
                                 , "contract" .= _contract
                                 , "interface" .= toJSON _interface
-                                , "preConditions" .= toJSON _preconditions
-                                , "cases" .= toJSON _cases
+                                -- , "preConditions" .= toJSON _preconditions
+                                , "block" .= toJSON _block
                                 , "postConditions" .= toJSON _postconditions ]
 
-instance ToJSON a => ToJSON (Case a t) where
+instance ToJSON (Case t) where
   toJSON (Case _ cond body) = object [ "caseCondition" .= toJSON cond
                                      , "body" .= toJSON body ]
+
+instance ToJSON (Effects t) where
+  toJSON (LocalOnly upds ret) = object [ "kind" .= String "LocalOnly"
+                                       , "updates" .= toJSON upds
+                                       , "return" .= toJSON ret ]
+  toJSON (LocalAndInteraction upds ints block) =
+    object [ "kind" .= String "LocalAndInteraction"
+           , "updates" .= toJSON upds
+           , "interactions" .= toJSON ints
+           , "continuation" .= toJSON block ]
+
+instance ToJSON (Interaction t) where
+  toJSON (TypedCallI _ s addr fn args mv iface) =
+    object [ "kind" .= String "CallI"
+           , "static" .= s
+           , "address" .= toJSON addr
+           , "function" .= fn
+           , "args" .= toJSON args
+           , "value" .= toJSON mv
+           , "returns" .= toJSON iface ]
+  toJSON (UntypedCallI _ s addr fn args mv iface) =
+    object [ "kind" .= String "CallI"
+           , "static" .= s
+           , "address" .= toJSON addr
+           , "function" .= fn
+           , "args" .= toJSON args
+           , "value" .= toJSON mv
+           , "returns" .= toJSON iface ]
+  toJSON (CreateI _ r c args mv) =
+    object [ "kind" .= String "CreateI"
+           , "result" .= r
+           , "contract" .= c
+           , "args" .= toJSON args
+           , "value" .= toJSON mv ]
+
+instance ToJSON (Block t) where
+  toJSON (Block iffs cases) = object [ "iff" .= toJSON iffs
+                                     , "cases" .= toJSON cases ]
 
 instance ToJSON Interface where
   toJSON (Interface x decls) = object [ "kind" .= String "Interface"
@@ -490,9 +549,10 @@ instance ToJSON (TypedRef t) where
                                ]
 
 instance ToJSON (Ref k t) where
-  toJSON (SVar _ t c x) = object [ "kind" .= pack "SVar"
+  toJSON (SVar _ t r c x) = object [ "kind" .= pack "SVar"
                                  , "svar" .=  pack x
                                  , "time" .=  pack (show t)
+                                 , "after" .=  pack (show r)
                                  , "contract" .= pack c ]
   toJSON (CVar _ at x) = object [ "kind" .= pack "Var"
                                 , "var" .=  pack x
@@ -575,10 +635,10 @@ instance ToJSON (Exp a t) where
                               , "type" .= pack "bytestring" ]
   toJSON (VarRef _ t a) = object [ "var"  .= toJSON a
                                  , "timing" .= show t ]
-  toJSON (Create _ f xs v) = object [ "symbol" .= pack "create"
-                                    , "arity"  .= Data.Aeson.Types.Number (fromIntegral $ length xs)
-                                    , "args"   .= Data.Aeson.Array (fromList [object [ "fun" .=  String (pack f) ], toJSON xs])
-                                    , "value"  .= toJSON v ]
+  -- toJSON (Create _ f xs v) = object [ "symbol" .= pack "create"
+  --                                   , "arity"  .= Data.Aeson.Types.Number (fromIntegral $ length xs)
+  --                                   , "args"   .= Data.Aeson.Array (fromList [object [ "fun" .=  String (pack f) ], toJSON xs])
+  --                                   , "value"  .= toJSON v ]
   toJSON (Array _ l) = object [ "symbol" .= pack "[]"
                               , "arity" .= Data.Aeson.Types.Number (fromIntegral $ length l)
                               , "args" .= Data.Aeson.Array (fromList (map toJSON l)) ]
@@ -651,7 +711,6 @@ eval e = case e of
 
   Array _ l -> mapM eval l
 
-  Create _ _ _ _ -> error "eval of contracts not supported"
   Address _ _ _ -> error "eval of contracts not supported"
   Mapping _ _ _ _ -> error "eval of mappings not supported"
   MappingUpd _ _ _ _ _ -> error "eval of mapping updates not supported"

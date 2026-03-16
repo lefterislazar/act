@@ -10,8 +10,8 @@ module Act.Syntax.TypedImplicit (module Act.Syntax.TypedImplicit) where
 import qualified Act.Syntax.Typed as Typed
 
 -- Reexports
-import Act.Syntax.Typed as Act.Syntax.TypedImplicit hiding (Act,Contract,Invariant,InvariantPred,Constructor,Behaviour,StorageUpdate,TypedRef,Cases)
-import Act.Syntax.Typed as Act.Syntax.TypedImplicit (pattern Act, pattern Contract, pattern Invariant, pattern Constructor, pattern Behaviour)
+import Act.Syntax.Typed as Act.Syntax.TypedImplicit hiding (Act,Contract,Invariant,InvariantPred,Constructor,Behaviour,StorageUpdate,TypedRef,Case(..))
+import Act.Syntax.Typed as Act.Syntax.TypedImplicit (pattern Act, pattern Contract, pattern Invariant, pattern Constructor, pattern Behaviour, pattern Case)
 
 -- We shadow all AST types with versions that need to have implicit timings
 type Act             = Typed.Act             Untimed
@@ -21,4 +21,4 @@ type Constructor     = Typed.Constructor     Untimed
 type Behaviour       = Typed.Behaviour       Untimed
 type StorageUpdate   = Typed.StorageUpdate   Untimed
 type TypedRef        = Typed.TypedRef        Untimed
-type Cases a         = Typed.Cases a         Untimed
+type Case            = Typed.Case            Untimed

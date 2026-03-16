@@ -168,16 +168,15 @@ neseplist(x, sep) : x                                 { ($1 NonEmpty.:| []) }
 
 -- rules --
 
-Contract : 'contract' id  Constructor list(Transition) { Contract (posn $1) (name $2) $3 $4 }
+Contract : 'contract' id Declarations Constructor list(Transition) { Contract (posn $1) (name $2) $3 $4 $5 }
 
 Constructor : 'constructor'
               Interface
               IsPayable
-              Declarations
               Block
               Ensures
               Invariants                              { Constructor (posn $1) $2
-                                                        $3 $4 $5 $6 $7 }
+                                                        $3 $4 $5 $6 }
 
 Transition : 'transition'
               id
@@ -213,17 +212,18 @@ IsStatic : 'static'                                   { True }
 MaybeSendValue : '{' 'value' ':' Expr '}'             { Just $4 }
                | {- empty -}                          { Nothing }
 
-InteractionBlock : optblock('interaction', Interaction) { $1 }
+InteractionBlock : 'interaction' Interaction { $2 }
 
-Interaction : IsStatic Expr '.' id MaybeSendValue '(' seplist(Expr, ',') ')'
-                                                      { CallI (posn $3) $1 $2 (name $4) $7 $5 Nothing }
+-- TODO: change id.id to exp.id somehow
+Interaction : IsStatic Expr id MaybeSendValue '(' seplist(Expr, ',') ')'
+                                                      { CallI (posn $5) $1 $2 (name $3) $6 $4 Nothing }
 
             | Interface '='
-              IsStatic Expr '.' id MaybeSendValue '(' seplist(Expr, ',') ')'
-                                                      { CallI (posn $5) $3 $4 (name $6) $9 $7 (Just $1) }
+              IsStatic Expr id MaybeSendValue '(' seplist(Expr, ',') ')'
+                                                      { CallI (posn $7) $3 $4 (name $5) $8 $6 (Just $1) }
 
-            | id '=' 'new' id MaybeSendValue '(' seplist(Expr, ',') ')'
-                                                      { CreateI (posn $3) (name $1) (name $4) $7 $5 }
+            | 'creates' id '=' 'new' id MaybeSendValue '(' seplist(Expr, ',') ')'
+                                                      { CreateI (posn $1) (name $2) (name $5) $8 $6 }
 
 
 ConstrCases : Creates                                 { [Case nowhere (BoolLit nowhere True) $1] }
@@ -257,9 +257,12 @@ Precondition :  optblock('iff', Expr)                 { $1 }
 
 Store : Ref ':=' Expr                                 { Update $1 $3 }
 
-Ref : id                                              { RVar (posn $1) Neither (name $1) }
-    | 'pre' '(' id ')'                                { RVar (posn $1) Pre (name $3) }
-    | 'post' '(' id ')'                               { RVar (posn $1) Post (name $3) }
+Ref : id                                              { RVar (posn $1) Nothing Neither (name $1) }
+    | 'pre' '(' id ')'                                { RVar (posn $1) Nothing Pre (name $3) }
+    | 'post' '(' id ')'                               { RVar (posn $1) Nothing Post (name $3) }
+    | ilit '.' id                                     { RVar (posn $1) (Just $ fromIntegral $ value $1) Neither (name $3) }
+    | ilit '.' 'pre' '(' id ')'                       { RVar (posn $1) (Just $ fromIntegral $ value $1) Pre (name $3) }
+    | ilit '.' 'post' '(' id ')'                      { RVar (posn $1) (Just $ fromIntegral $ value $1) Post (name $3) }
     | Ref '[' Expr ']'                                { RIndex (posn $2) $1 $3 }
     | Ref '.' id                                      { RField (posn $2) $1 (name $3) }
 
@@ -322,9 +325,6 @@ Expr : '(' Expr ')'                                   { $2 }
   -- composites
   | 'if' Expr 'then' Expr 'else' Expr                 { EITE (posn $1) $2 $4 $6 }
   | Ref                                               { ERef $1 }
-  | 'new' id '(' seplist(Expr, ',') ')'               { ECreate (posn $1) (name $2) $4 Nothing }
-  | 'new' id '{' 'value' ':' Expr '}' '(' seplist(Expr, ',') ')'
-                                                      { ECreate (posn $1) (name $2) $9 (Just $6) }
   | 'address' '(' Expr ')'                            { AddrOf (posn $1) $3 }
 
   | '[' neseplist(Expr, ',') ']'                      { EArray  (posn $1) $ NonEmpty.toList $2 }

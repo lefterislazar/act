@@ -4,10 +4,8 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 module Act.Syntax.Untyped (module Act.Syntax.Untyped, module Act.Syntax.Types) where
@@ -25,10 +23,10 @@ newtype Act = Main [Contract]
 data IsPayable = Payable | NonPayable
   deriving (Eq, Show)
 
-data Contract = Contract Pn Id Constructor [Transition]
+data Contract = Contract Pn Id Declarations Constructor [Transition]
   deriving (Eq, Show)
 
-data Constructor = Constructor Pn Interface IsPayable Declarations Block Ensures Invariants
+data Constructor = Constructor Pn Interface IsPayable Block Ensures Invariants
   deriving (Eq, Show)
 
 data Transition = Transition Pn Id Interface IsPayable RetType Block Ensures
@@ -41,7 +39,7 @@ data Block = Block Iff Cases
 
 -- This GADT stuff probably not good idea for a parser..?
 data Effects where
-  LocalAndInteraction :: StorageUpdates -> [Interaction] -> Block -> Effects
+  LocalAndInteraction :: StorageUpdates -> Interaction -> Block -> Effects
   LocalOnly           :: StorageUpdates -> (Maybe Expr) -> Effects
   deriving (Eq, Show)
 
@@ -89,7 +87,7 @@ data TimeTag = Pre | Post | Neither
   deriving (Eq, Show)
 
 data Ref
-  = RVar Pn TimeTag Id
+  = RVar Pn (Maybe Int) TimeTag Id
   | RIndex Pn Ref Expr
   | RField Pn Ref Id
   deriving (Eq, Show)
@@ -113,7 +111,6 @@ data Expr
   | EMod Pn Expr Expr
   | EExp Pn Expr Expr
   | ERef Ref
-  | ECreate Pn Id [Expr] (Maybe Expr)
   | EArray Pn [Expr]
   | ListConst Expr
   | ECat Pn Expr Expr

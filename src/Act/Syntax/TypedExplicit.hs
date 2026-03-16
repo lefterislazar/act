@@ -14,8 +14,8 @@ import qualified Act.Syntax.Typed as Typed
 import Act.Syntax.Typed (Timing(..),setPre,setPost)
 
 -- Reexports
-import Act.Syntax.Typed as Act.Syntax.TypedExplicit hiding (Timing(..),Timable(..),Time,Neither,Act,Contract,Invariant,InvariantPred,Constructor,Behaviour,Cases,StorageUpdate,TypedRef,Exp,TypedExp,Ref,Bcase,Ccase)
-import Act.Syntax.Typed as Act.Syntax.TypedExplicit (pattern Act, pattern Contract, pattern Invariant, pattern Constructor, pattern Behaviour, pattern Exp)
+import Act.Syntax.Typed as Act.Syntax.TypedExplicit hiding (Timing(..),Timable(..),Time,Neither,Act,Contract,Invariant,InvariantPred,Constructor,Behaviour,StorageUpdate,TypedRef,Exp,TypedExp,Ref,Case(..),Block(..),Interaction)
+import Act.Syntax.Typed as Act.Syntax.TypedExplicit (pattern Act, pattern Contract, pattern Invariant, pattern Constructor, pattern Behaviour, pattern Exp, pattern Case, pattern Block)
 
 
 -- We shadow all timing-agnostic AST types with explicitly timed versions.
@@ -25,14 +25,14 @@ type Invariant        = Typed.Invariant        Timed
 type InvariantPred    = Typed.InvariantPred    Timed
 type Constructor      = Typed.Constructor      Timed
 type Behaviour        = Typed.Behaviour        Timed
-type Cases          a = Typed.Cases          a Timed
 type StorageUpdate    = Typed.StorageUpdate    Timed
 type TypedRef         = Typed.TypedRef         Timed
 type Ref            k = Typed.Ref            k Timed
 type Exp            a = Typed.Exp            a Timed
 type TypedExp         = Typed.TypedExp         Timed
-type Ccase            = Typed.Ccase            Timed
-type Bcase            = Typed.Bcase            Timed
+type Case             = Typed.Case             Timed
+type Block            = Typed.Block            Timed
+type Interaction      = Typed.Interaction     Timed
 
 ------------------------------------------
 -- * How to make all timings explicit * --
@@ -56,16 +56,15 @@ instance Annotatable Typed.InvariantPred where
 
 instance Annotatable Typed.Constructor where
   annotate ctor@Constructor{..} = ctor
-    { _cpreconditions = setPre <$> _cpreconditions
+    { _cblock = annotate _cblock
     , _cpostconditions = setPost <$> _cpostconditions
-    , _ccases = annotateCCase <$> _ccases
     , _invariants  = annotate <$> _invariants
     }
 
 instance Annotatable Typed.Behaviour where
   annotate behv@Behaviour{..} = behv
-    { _preconditions = setPre <$> _preconditions
-    , _cases = annotateCase <$> _cases
+    { _block = annotate _block
+    -- , _cases = annotate <$> _cases
     }
 
 instance Annotatable Typed.TypedExp where
@@ -75,11 +74,23 @@ instance Annotatable Typed.StorageUpdate where
   -- The timing in items only refers to the timing of mapping indices of a
   -- storage update. Hence, it should be Pre
   annotate :: Typed.StorageUpdate Untimed -> Typed.StorageUpdate Timed
-  annotate (Update typ item expr) = Update typ (setPre item) (setPre expr)
+  annotate (Typed.Update typ item expr) = Typed.Update typ (setPre item) (setPre expr)
 
-annotateCCase :: Case [Typed.StorageUpdate Untimed] Untimed -> Case [Typed.StorageUpdate Timed] Timed
-annotateCCase (Case pn cond upds) = Case pn (setPre cond) (annotate <$> upds)
+instance Annotatable Typed.Case where
+  annotate :: Typed.Case Untimed -> Typed.Case Timed
+  annotate (Typed.Case pn cond effs) = Typed.Case pn (setPre cond) (annotate effs)
 
-annotateCase :: Case ([Typed.StorageUpdate Untimed], Maybe (Typed.TypedExp Untimed)) Untimed
-             -> Case ([Typed.StorageUpdate Timed], Maybe (Typed.TypedExp Timed)) Timed
-annotateCase (Case pn cond (upds, ret)) = Case pn (setPre cond) (annotate <$> upds, annotate <$> ret)
+instance Annotatable Typed.Block where
+  annotate :: Typed.Block Untimed -> Typed.Block Timed
+  annotate (Block iffs cases) = Block (setPre <$> iffs) (annotate <$> cases)
+
+instance Annotatable Typed.Effects where
+  annotate :: Typed.Effects Untimed -> Typed.Effects Timed
+  annotate (LocalOnly upds ret) = LocalOnly (annotate <$> upds) (annotate <$> ret)
+  annotate (LocalAndInteraction upds inter next) = LocalAndInteraction (annotate <$> upds) (annotate inter) (annotate next)
+
+instance Annotatable Typed.Interaction where
+  annotate :: Typed.Interaction Untimed -> Typed.Interaction Timed
+  annotate (TypedCallI pn static addr fn args val rets) = TypedCallI pn static (setPre addr) fn (setPre <$> args) (setPre <$> val) rets
+  annotate (UntypedCallI pn static addr fn args val rets) = UntypedCallI pn static (setPre addr) fn (setPre <$> args) (setPre <$> val) rets
+  annotate (CreateI pn addrVar contract args val) = CreateI pn addrVar contract (setPre <$> args) (setPre <$> val)

@@ -40,7 +40,7 @@ checkIntegerBoundsContract (Contract src ctor behvs) = constraintSource src <$>
     checkIntegerBoundsConstructor ctor ++ concatMap checkIntegerBoundsBehaviour behvs
 
 checkIntegerBoundsConstructor :: Constructor -> [Constraint Untimed]
-checkIntegerBoundsConstructor (Constructor _ _ (Interface _ decls) _ pre cases _ _) =
+checkIntegerBoundsConstructor (Constructor _ _ (Interface _ decls) _ (Block pre cases) _ _) =
     -- add calldata to env
     let env = addCalldata decls emptyEnv in
     -- add preconditions to env
@@ -52,7 +52,7 @@ checkIntegerBoundsConstructor (Constructor _ _ (Interface _ decls) _ pre cases _
 
 
 checkIntegerBoundsBehaviour :: Behaviour -> [Constraint Untimed]
-checkIntegerBoundsBehaviour (Behaviour _ _ _ (Interface _ decls) _ pre cases _) =
+checkIntegerBoundsBehaviour (Behaviour _ _ _ (Interface _ decls) _ (Block pre cases) _) =
     -- add calldata to env
     let env = addCalldata decls emptyEnv in
     -- add preconditions to env
@@ -62,12 +62,12 @@ checkIntegerBoundsBehaviour (Behaviour _ _ _ (Interface _ decls) _ pre cases _) 
     concatMap (checkIntegerBoundsBehvCase env') cases
     -- we ignore postconditions for now
 
-checkIntegerBoundsConstrCase :: Env -> Ccase Untimed -> [Constraint Untimed]
+checkIntegerBoundsConstrCase :: Env -> Case -> [Constraint Untimed]
 checkIntegerBoundsConstrCase env (Case _ c upds) =
     checkIntegerBoundsExp env c ++
     addIffs [c] (concatMap (\(Update _ _ e) -> checkIntegerBoundsExp env e) upds)
 
-checkIntegerBoundsBehvCase :: Env -> Bcase Untimed -> [Constraint Untimed]
+checkIntegerBoundsBehvCase :: Env -> Case -> [Constraint Untimed]
 checkIntegerBoundsBehvCase env (Case _ c (upds, ret)) =
     checkIntegerBoundsExp env c ++
     addIffs [c] (concatMap (\(Update _ _ e) -> checkIntegerBoundsExp env e) upds ++
@@ -136,6 +136,5 @@ checkIntegerBoundsExp env (InRange _ _ e) = checkIntegerBoundsExp env e
 checkIntegerBoundsExp env (Cat _ e1 e2) = checkIntegerBoundsExp env e1 ++ checkIntegerBoundsExp env e2
 checkIntegerBoundsExp env (Slice _ e1 e2 e3) = checkIntegerBoundsExp env e1 ++ checkIntegerBoundsExp env e2 ++ checkIntegerBoundsExp env e3
 checkIntegerBoundsExp env (Array _ es) = concatMap (checkIntegerBoundsExp env) es
-checkIntegerBoundsExp env (Create _ _ args _) = concatMap (\ (TExp _ e) -> checkIntegerBoundsExp env e) args
 checkIntegerBoundsExp env (Mapping _ _ _ kvs) = concatMap (\(k,v) -> checkIntegerBoundsExp env k ++ checkIntegerBoundsExp env v) kvs
 checkIntegerBoundsExp env (MappingUpd _ _ _ _ kvs) = concatMap (\(k,v) -> checkIntegerBoundsExp env k ++ checkIntegerBoundsExp env v) kvs

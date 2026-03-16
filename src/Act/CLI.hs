@@ -46,13 +46,13 @@ import Act.Syntax.TypedExplicit
 import Act.Syntax.Timing 
 import Act.Type hiding (Env)
 import Act.Rocq hiding (indent, (<+>))
-import Act.Equiv
+-- import Act.Equiv
 import Act.HEVM_utils
-import Act.Consistency
+-- import Act.Consistency
 import Act.Print
-import Act.Entailment
-import Act.Bounds
-import Act.Overflow
+-- import Act.Entailment
+-- import Act.Bounds
+-- import Act.Overflow
 
 --import Act.Decompile
 
@@ -118,12 +118,15 @@ main = do
       Type f jsn solver' smttimeout' debug' -> do
         solver'' <- parseSolver solver'
         type' f jsn solver'' smttimeout' debug'
+      -- Rocq {} -> undefined
       Rocq f jsn solver' smttimeout' debug' -> do
         solver'' <- parseSolver solver'
         rocq' f jsn solver'' smttimeout' debug'
-      Equiv spec' sol' vy' code' initcode' layout' sources' solver' smttimeout' debug' -> do
-        solver'' <- parseSolver solver'
-        equivCheck spec' sol' vy' code' initcode' layout' sources' solver'' smttimeout' debug'
+      Equiv {} -> undefined
+      -- Equiv spec' sol' vy' code' initcode' layout' sources' solver' smttimeout' debug' -> do
+      --   solver'' <- parseSolver solver'
+      --   undefined
+      --   equivCheck spec' sol' vy' code' initcode' layout' sources' solver'' smttimeout' debug'
 
 
 ---------------------------------
@@ -148,9 +151,10 @@ type' :: Maybe FilePath -> Maybe FilePath -> Solvers.Solver -> Maybe Integer -> 
 type' f jsn solver' smttimeout' debug' = do
   fs <- processSources jsn f
   contents <- flip zip fs <$> mapM readFile fs
-  proceed contents (first addBounds <$> compile contents) $ \(spec', cnstrs) -> do
-    checkTypeConstraints contents solver' smttimeout' debug' cnstrs
-    checkUpdateAliasing spec' solver' smttimeout' debug'
+  -- proceed contents (first addBounds <$> compile contents) $ \(spec', cnstrs) -> do
+  proceed contents (compile contents) $ \(spec', cnstrs) -> do
+    -- checkTypeConstraints contents solver' smttimeout' debug' cnstrs
+    -- checkUpdateAliasing spec' solver' smttimeout' debug'
     B.putStrLn $ encode spec'
 
 parseSolver :: Maybe Text -> IO Solvers.Solver
@@ -163,10 +167,12 @@ parseSolver s = case s of
                               input -> render (text $ "unrecognised solver: " <> Text.pack input) >> exitFailure
 
 
+{-
 checkTypeConstraints :: [(String, FilePath)] -> Solvers.Solver -> Maybe Integer -> Bool -> [Constraint Timed] -> IO ()
 checkTypeConstraints contents solver' smttimeout' debug' cnstrs = do
   errs <- checkEntailment solver' smttimeout' debug' cnstrs
   proceed contents errs $ \_ -> pure ()
+  -}
 
 
 rocq' :: Maybe FilePath -> Maybe FilePath -> Solvers.Solver -> Maybe Integer -> Bool -> IO ()
@@ -174,11 +180,11 @@ rocq' f jsn solver' smttimeout' debug' = do
   fs <- processSources jsn f
   contents <- flip zip fs <$> mapM readFile fs
   proceed contents (compile contents) $ \(spec', cnstrs) -> do
-    checkTypeConstraints contents solver' smttimeout' debug' cnstrs
-    checkUpdateAliasing spec' solver' smttimeout' debug'
+    -- checkTypeConstraints contents solver' smttimeout' debug' cnstrs
+    -- checkUpdateAliasing spec' solver' smttimeout' debug'
     TIO.putStr $ rocq spec'
 
-
+{-
 equivCheck :: Maybe FilePath -> Maybe FilePath -> Maybe FilePath -> Maybe String -> Maybe String -> Maybe String -> Maybe FilePath -> Solvers.Solver -> Maybe Integer -> Bool -> IO ()
 equivCheck actspec sol' vy' code' initcode' layout' sources' solver' timeout debug' = do
   let config = if debug' then debugActConfig else defaultActConfig
@@ -211,11 +217,13 @@ equivCheck actspec sol' vy' code' initcode' layout' sources' solver' timeout deb
                     (layoutMode, initcode'', runtimecode') = fromMaybe (error $ "Contract " <> cid <> " not found in sources") $ Map.lookup (Just cid) inputsMap
                 in (Map.insert cid (spec', initcode'', runtimecode', layoutMode) cmap)
              ) mempty contracts
+             -}
 
 -- In case of Failue print errors, else return value
 validationErrIO :: Show e => Validation (NonEmpty e) a -> IO a
 validationErrIO v = validation (\e -> (render $ text "Errors in json:") >> (mapM_ (render . (<> line) . text . Text.pack . show) e) >> exitFailure) pure v
 
+{-
 -- Creates a map of information for contracts available from source code or bytecode arguments
 processEquivSources :: Maybe FilePath -> Maybe FilePath -> Maybe FilePath -> Maybe FilePath -> Maybe String -> Maybe String -> Maybe String -> IO ([FilePath], (Map (Maybe Id) (LayoutMode, ByteString, ByteString)))
 processEquivSources sources' actspec sol' vy' code' initcode' layout' =
@@ -280,6 +288,7 @@ processEquivSources sources' actspec sol' vy' code' initcode' layout' =
       layout''' <- validationErrIO $ checkLanguage $ Text.pack layout''
       pure ([a], Map.singleton Nothing (layout''', toCode "bytecode" (Text.pack initc), toCode "bytecode" (Text.pack run)))
     (_,_,_,_,Nothing,Nothing, Just _) -> render (text "Option --layout given, but --code and --initcode are not used" <> line) >> exitFailure
+-}
 
 -- Collects specs from CLI input
 processSources :: Maybe FilePath -> Maybe FilePath -> IO [FilePath]
@@ -326,6 +335,7 @@ readSourcesJSON jsn = case eitherDecode $ BS.fromStrict $ encodeUtf8 jsn of
 locateSpecs :: FilePath -> [Text] -> [FilePath]
 locateSpecs jsonPath specs = ((</>) (takeDirectory jsonPath) . Text.unpack) <$> specs
 
+{-
 checkLanguage :: Text -> Validation (NonEmpty Text) LayoutMode
 checkLanguage "Solidity" = Success SolidityLayout
 checkLanguage "Vyper" = Success VyperLayout
@@ -371,6 +381,7 @@ toCode fromFile t = case BS16.decodeBase16Untyped (encodeUtf8 (stripSuffixIf "\n
   where
     stripSuffixIf s txt = fromMaybe txt $ Text.stripSuffix s txt
     stripPrefixIf s txt = fromMaybe txt $ Text.stripPrefix s txt
+    -}
 
 -------------------
 -- *** Util *** ---
@@ -381,6 +392,6 @@ proceed :: Validate err => [(String,FilePath)] -> err (NonEmpty (Pn, (FilePath, 
 proceed contents comp continue = validation (prettyErrs contents) continue (comp ^. revalidate)
 
 compile :: [(String, FilePath)] -> Error (FilePath ,String) (Act, [Constraint Timed])
-compile = pure . (first annotate) <==< pure . (\(acts, cnstr) -> (acts, (checkIntegerBoundsAct acts) ++ cnstr))
+compile = pure . (first annotate) -- <==< pure . (\(acts, cnstr) -> (acts, (checkIntegerBoundsAct acts) ++ cnstr))
   <==< typecheck <==< (traverse (\(content, src) -> (,src) <$> (errorSource src $ parse $ lexer content)))
 

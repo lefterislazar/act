@@ -116,12 +116,6 @@ mapExpM f = \case
     l' <- mapM f l
     f (Array p l')
 
-  --contracts
-
-  Create p n as v -> do
-    as' <- mapM (mapTypedExpM f) as
-    v' <- mapM (mapExpM f) v
-    f (Create p n as' v')
 
   --polymorphic
 
@@ -169,7 +163,7 @@ mapTypedExpM f (TExp t e) = do
 
 mapRefM :: Monad m => (forall a . Exp a t -> m (Exp a t)) -> Ref k t -> m (Ref k t)
 mapRefM f = \case
-  SVar p time c a -> pure (SVar p time c a)
+  SVar p time r c a -> pure (SVar p time r c a)
   CVar p a b -> pure (CVar p a b)
   RArrIdx p a b n -> do
     a' <- mapRefM f a
