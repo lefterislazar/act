@@ -57,11 +57,11 @@ contractCode store (Contract _ ctor@Constructor{..} behvs) = T.unlines $
   [ "Module " <> T.pack _cname <> ".\n" ]
   <> [ stateRecord ]
   <> [ contractAddressIn _cname store ]
-  -- <> [ addressIn _cname store ]
-  <> [ noAliasing _cname store ]
-  -- <> [ intBounds _cname store ]
   <> [ intBoundsRec _cname store ]
   <> [ nextAddrConstraint ]
+  <> [ noAliasing _cname store ]
+  <> [ envNextAddrConstraints ]
+  <> [ envNextAddrStateConstraints ]
   <> [ constructorCode store ctor ]
   <> ( behaviourCode store <$> behvs )
   <> [ localStep _cname behvs]
@@ -110,13 +110,6 @@ initPrecs i conds = inductive
       (namedHyps . concat $
       [ nameHypothesis "iff" $ coqprop <$> conds
       , interfaceConstraints i
-      , maybeToList (("CallerBound",) <$> coqbound ("Caller" <+> envVar) (ValueType TAddress))
-      , maybeToList (("OriginBound",) <$> coqbound ("Origin" <+> envVar) (ValueType TAddress))
-      , maybeToList (("ThisBound",) <$> coqbound ("This" <+> envVar) (ValueType TAddress))
-      , maybeToList (("NextAddressBound",) <$> coqbound ("NextAddr") (ValueType TAddress))
-      , [("Caller_lt_NextAddr", "Caller" <+> envVar <+> "<" <+> nextAddrVar)]
-      , [("Origin_lt_NextAddr", "Origin" <+> envVar <+> "<" <+> nextAddrVar)]
-      , [("This_eq_NextAddr", "This" <+> envVar <+> "=" <+> nextAddrVar)]
       ]) <> ",\n"
       <> (initPrecsType <+> envVar <+> arguments i <+> nextAddrVar))
 
@@ -148,6 +141,7 @@ construction' store name i cases = inductive
       let body = indent 2 ((namedHyps . concat $
             [ [("conds", initPrecsType <+> envVar <+> arguments i <+> nextAddrVar) ]
             , [("case_cond", coqprop caseCond) ]
+            , [("envNextAddrConsistent", envNextAddrCnstrType <+> envVar <+> nextAddrVar)]
             , nameHypothesis ("bindings") bindingsHyp
             ]) <> ",\n"
             <> (constructorType <+> envVar <+> arguments i <+> nextAddrVar <+> parens s <+> parens (iNextAddr finalI)))
@@ -226,16 +220,8 @@ behvConds name i conds = do
       [ nameHypothesis "iff" $ coqprop <$> conds
       , [("nextAddrCnstrnt_State", nextAddrConstraintType <+> nextAddrVar <+> stateVar) ]
       , interfaceConstraints i
-      , maybeToList (("CallerBound",) <$> coqbound ("Caller" <+> envVar) (ValueType TAddress))
-      , maybeToList (("OriginBound",) <$> coqbound ("Origin" <+> envVar) (ValueType TAddress))
-      , maybeToList (("ThisBound",) <$> coqbound ("This" <+> envVar) (ValueType TAddress))
-      , maybeToList (("NextAddressBound",) <$> coqbound ("NextAddr") (ValueType TAddress))
-      , [("This_lt_NextAddr", "This" <+> envVar <+> "<" <+> nextAddrVar)]
-      , [("Caller_lt_NextAddr", "Caller" <+> envVar <+> "<" <+> nextAddrVar)]
-      , [("Origin_lt_NextAddr", "Origin" <+> envVar <+> "<" <+> nextAddrVar)]
-      , [("no_self_call", parens $ "forall (p : address)," <+> addressInType <+> stateVar <+> "p" <+> "->" <+> "Caller" <+> envVar <+> "<>" <+> "p") ]
-      , [("no_self_origin", parens $ "forall (p : address)," <+> addressInType <+> stateVar <+> "p" <+> "->" <+> "Origin" <+> envVar <+> "<>" <+> "p") ]
-      , [("This_eq_addState", "This" <+> envVar <+> "=" <+> addrField <+> stateVar)]
+      , [("envNextAddrConsistent", envNextAddrCnstrType <+> envVar <+> nextAddrVar)]
+      , [("stateEnvConsistent", envNextAddrStateCnstrType <+> envVar <+> nextAddrVar <+> stateVar)]
       ]) <> ",\n"
       <> (T.pack n <> "_conds") <+> envVar <+> arguments i <+> stateVar <+>nextAddrVar )
 
@@ -466,6 +452,34 @@ intBoundsRec name store = inductive
 
     go :: Id -> (ValueType, Integer) -> Maybe T.Text
     go v (t,_) = coqbound (T.pack v <+> stateVar) t
+
+envNextAddrConstraints :: T.Text
+envNextAddrConstraints = inductive envNextAddrCnstrType (envDecl <+> nextAddrDecl) "Prop"  [(envNextAddrCnstrType <> "C", "forall", body)]
+  where
+    body = indent 2 (
+      (namedHyps . concat $
+      [ maybeToList (("CallerBound",) <$> coqbound ("Caller" <+> envVar) (ValueType TAddress))
+      , maybeToList (("OriginBound",) <$> coqbound ("Origin" <+> envVar) (ValueType TAddress))
+      , maybeToList (("ThisBound",) <$> coqbound ("This" <+> envVar) (ValueType TAddress))
+      , maybeToList (("NextAddressBound",) <$> coqbound ("NextAddr") (ValueType TAddress))
+      , [("Caller_lt_NextAddr", "Caller" <+> envVar <+> "<" <+> nextAddrVar)]
+      , [("Origin_lt_NextAddr", "Origin" <+> envVar <+> "<" <+> nextAddrVar)]
+      , [("This_eq_NextAddr", "This" <+> envVar <+> "=" <+> nextAddrVar)]
+      ]) <> ",\n"
+      <> (envNextAddrCnstrType <+> envVar <+> nextAddrVar))
+
+envNextAddrStateConstraints :: T.Text
+envNextAddrStateConstraints = inductive envNextAddrStateCnstrType (envDecl <+> nextAddrDecl <+> stateDecl) "Prop"  [(envNextAddrStateCnstrType <> "C", "forall", body)]
+  where
+    body = indent 2 (
+      (namedHyps . concat $
+      [ [("nextAddrCnstrnt_State", nextAddrConstraintType <+> nextAddrVar <+> stateVar) ]
+      , [("stateIntBounds", integerBoundsType <+> stateVar) ]
+      , [("no_self_call", parens $ "forall (p : address)," <+> addressInType <+> stateVar <+> "p" <+> "->" <+> "Caller" <+> envVar <+> "<>" <+> "p") ]
+      , [("no_self_origin", parens $ "forall (p : address)," <+> addressInType <+> stateVar <+> "p" <+> "->" <+> "Origin" <+> envVar <+> "<>" <+> "p") ]
+      , [("This_eq_addState", "This" <+> envVar <+> "=" <+> addrField <+> stateVar)]
+      ]) <> ",\n"
+      <> (envNextAddrStateCnstrType <+> envVar <+> nextAddrVar <+> stateVar))
 
 interfaceConstraints :: Interface -> [(T.Text, T.Text)]
 interfaceConstraints i@(Interface _ decls) = concatMap go decls <> interfaceConsistency i
@@ -1248,6 +1262,12 @@ behvPrecsType = "behvPrecs"
 
 integerBoundsType :: T.Text
 integerBoundsType = "stateIntegerBounds"
+
+envNextAddrCnstrType :: T.Text
+envNextAddrCnstrType = "envNextAddrConsistency"
+
+envNextAddrStateCnstrType :: T.Text
+envNextAddrStateCnstrType = "stateEnvConsistency"
 
 multistepType :: T.Text
 multistepType = "multistep"

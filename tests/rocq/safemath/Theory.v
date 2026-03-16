@@ -22,12 +22,11 @@ Proof.
   intros.
   split. {
     intros.
-    destruct H.
+    (* destruct H. *)
     destruct H0 as [Hx [Hy Hxy]].
     unfold range256 in *.
     apply mul_case0_ret.
-    - constructor;
-      repeat split; try lia; assumption.
+    - assumption.
     - trivial.
   } {
     intros Hmul_ret. destruct Hmul_ret. destruct H0.

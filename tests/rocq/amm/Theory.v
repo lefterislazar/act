@@ -216,7 +216,7 @@ Proof.
           intro H_NA_leq_x.
           assert (Caller ENV' < a). {
             apply Z.lt_le_trans with (m := NextAddr).
-            * assumption.
+            * destruct H_envNextAddrConsistent; assumption.
             * lia.
           }
           assert (a =? Caller ENV' = false). simpl. lia.
@@ -433,6 +433,7 @@ Proof.
   unfold Amm_const_addr_Prop.
   simpl.
   destruct H_conds.
+  destruct H_envNextAddrConsistent.
   auto.
 Qed.
 
@@ -461,7 +462,7 @@ Proof.
   unfold Amm_balance_ge_reserve_0_AssistedProp, Amm_balance_ge_reserve_0_Prop.
   split. assert (invariantInit Amm_const_addr_Prop); eapply Amm_addr_constant_init. eassumption.
   split. assert (invariantInit Amm_allowance_zero_Prop); eapply Amm_allowance_zero_init; eassumption.
-  destruct Hconstr, H_conds; simpl. auto.
+  destruct Hconstr, H_conds, H_envNextAddrConsistent; simpl. auto.
   rewrite H_This_eq_NextAddr.
   reflexivity.
 Qed.
@@ -480,13 +481,13 @@ Proof.
        | Hnac Horgc Hcallerc _ HTokenTransition Haddr_const _ _ _ Hres0_const _ Htk0_const ].
   - destruct HAmmStep; auto; try now (destruct H; simpl; auto).
     + (* swap0 *)
-      destruct H; destruct H_conds; simpl; rewrite <- H_This_eq_addState; reflexivity.
+      destruct H; destruct H_conds, H_stateEnvConsistent; simpl; rewrite <- H_This_eq_addState; reflexivity.
     + (* swap1 *)
-      destruct H; destruct H_conds; simpl; [ rewrite_eqbs | rewrite H_This_eq_addState ]; reflexivity.
+      destruct H; destruct H_conds, H_stateEnvConsistent; simpl; [ rewrite_eqbs | rewrite H_This_eq_addState ]; reflexivity.
     + (* mint *)
-      destruct H; destruct H_conds; rewrite H_This_eq_addState; simpl; reflexivity.
+      destruct H; destruct H_conds, H_stateEnvConsistent; rewrite H_This_eq_addState; simpl; reflexivity.
     + (* burn *)
-      destruct H; destruct H_conds; simpl; [ rewrite_eqbs | rewrite H_This_eq_addState ]; reflexivity.  
+      destruct H; destruct H_conds, H_stateEnvConsistent; simpl; [ rewrite_eqbs | rewrite H_This_eq_addState ]; reflexivity.  
   - assert (addr STATE <> Caller ENV) as H_addrState_neq_caller;
       [apply Z.neq_sym; apply Hcallerc; constructor|].
     rewrite <- Haddr_const, <- Hres0_const.
@@ -564,7 +565,7 @@ Proof.
   unfold Amm_balance_ge_reserve_1_AssistedProp, Amm_balance_ge_reserve_1_Prop.
   split. assert (invariantInit Amm_const_addr_Prop); eapply Amm_addr_constant_init; eassumption.
   split. assert (invariantInit Amm_allowance_zero_Prop); eapply Amm_allowance_zero_init; eassumption.
-  destruct Hconstr, H_conds; simpl. auto.
+  destruct Hconstr, H_conds, H_envNextAddrConsistent; simpl. auto.
   rewrite H_This_eq_NextAddr.
   reflexivity.
 Qed.
@@ -583,13 +584,13 @@ Proof.
        | Hnac Horgc Hcallerc _ HTokenTransition Haddr_const _ _ _ _ Hres1_const Htk0_const ].
   - destruct HAmmStep; auto; try now (destruct H; simpl; auto).
     + (* swap0 *)
-      destruct H; destruct H_conds; simpl; [ rewrite_eqbs | rewrite H_This_eq_addState ]; reflexivity.
+      destruct H; destruct H_conds, H_stateEnvConsistent; simpl; [ rewrite_eqbs | rewrite H_This_eq_addState ]; reflexivity.
     + (* swap1 *)
-      destruct H; destruct H_conds; simpl; rewrite <- H_This_eq_addState; reflexivity.
+      destruct H; destruct H_conds, H_stateEnvConsistent; simpl; rewrite <- H_This_eq_addState; reflexivity.
     + (* mint *)
-      destruct H; destruct H_conds; rewrite H_This_eq_addState; simpl; reflexivity.
+      destruct H; destruct H_conds, H_stateEnvConsistent; rewrite H_This_eq_addState; simpl; reflexivity.
     + (* burn *)
-      destruct H; destruct H_conds; simpl; [ rewrite_eqbs | rewrite H_This_eq_addState ]; reflexivity.  
+      destruct H; destruct H_conds, H_stateEnvConsistent; simpl; [ rewrite_eqbs | rewrite H_This_eq_addState ]; reflexivity.  
   - destruct HTokenTransition; 
     simpl; rewrite <- Haddr_const, <- Hres1_const, <- Htk1_const; assumption.
   - assert (addr STATE <> Caller ENV) as H_addrState_neq_caller;
@@ -793,13 +794,13 @@ Theorem initialSupply': forall ENV _totalSupply t0 t1 NextAddr State NextAddr' (
     totalSupply State.
 Proof.
   intros ENV ? ? ? ? ? ? ? _ _ _ Hcnstr.
-  destruct Hcnstr as [? H_conds _ _]; simpl.
+  destruct Hcnstr as [? H_conds _ ? _]; simpl.
 
   assert (forall n : nat, Z.of_nat n < Caller ENV ->
       balanceOf_sum' (fun _binding_0 : address => if _binding_0 =? This ENV then 1000 else if _binding_0 =? Caller ENV then _totalSupply - 1000 else 0) n 0 = 0) as H0.
   { intros. induction n0.
-    - simpl. destruct H_conds. destruct (Caller ENV), (This ENV); lia; discriminate.
-    - simpl. rewrite -> balanceOf_sum_acc. destruct H_conds.
+    - simpl. destruct H_conds, H_envNextAddrConsistent. destruct (Caller ENV), (This ENV); lia; discriminate.
+    - simpl. rewrite -> balanceOf_sum_acc. destruct H_conds, H_envNextAddrConsistent.
       destruct (Z.of_nat (S n0) =? Caller ENV) eqn:Heq.
       + apply Z.eqb_eq in Heq. apply Z.lt_neq in H. contradiction.
       + rewrite IHn0.
@@ -809,7 +810,7 @@ Proof.
   }
 
   induction n.
-  - destruct H_conds; simpl.
+  - destruct H_conds, H_envNextAddrConsistent; simpl.
     assert (forall p, Z.of_nat 0 <? Z.pos p = true) as Hmy; [auto|].
     destruct (Caller ENV) eqn:Hcaller, (This ENV) eqn:Hthis; try lia.
     + rewrite Z.ltb_irrefl; rewrite Hmy; lia.
@@ -819,15 +820,15 @@ Proof.
     + destruct (Z.of_nat (S n) =? Caller ENV) eqn:Heq. * lia.
       * rewrite H0.
         -- destruct (Z.of_nat (S n) =? This ENV) eqn:Heq'; try lia.
-          ++ destruct H_conds. apply Z.eqb_eq in Heq'. apply Z.ltb_lt in Hlt. lia.
+          ++ destruct H_conds, H_envNextAddrConsistent. apply Z.eqb_eq in Heq'. apply Z.ltb_lt in Hlt. lia.
         -- apply Z.ltb_lt in Hlt. lia.
     + destruct (Z.of_nat (S n) =? Caller ENV) eqn:Heq.
       * rewrite H0.
         -- destruct (Z.of_nat (S n) =? This ENV) eqn:Heq'; try lia.
-          ++ destruct H_conds. rewrite_b_left Heq'. lia.
+          ++ destruct H_conds, H_envNextAddrConsistent. rewrite_b_left Heq'. lia.
           ++ destruct (Z.of_nat (S n) <? This ENV) eqn:Hlt'; try lia. 
             apply Z.ltb_ge in Hlt'.
-            apply Z.eqb_eq in Heq. rewrite Heq in *. destruct H_conds. lia.
+            apply Z.eqb_eq in Heq. rewrite Heq in *. destruct H_conds, H_envNextAddrConsistent. lia.
         -- apply Z.eqb_eq in Heq. rewrite <- Heq. lia.
       * rewrite IHn.
         assert ( Z.of_nat n <? Caller ENV = false).
@@ -852,18 +853,18 @@ Proof.
   intros.
   unfold balanceOf_sum.
   (*destruct H0 as [? H_conds _ _].*)
-  erewrite -> initialSupply'; try (now eassumption); destruct H0 as [? H_conds _ _].
+  erewrite -> initialSupply'; try (now eassumption); destruct H0 as [? H_conds _ ?].
   - rewrite Z2Nat.id.
     + destruct (MAX_ADDRESS <? Caller ENV) eqn:Hineq.
       * apply Z.ltb_lt in Hineq. lia.
       * destruct (MAX_ADDRESS <? This ENV) eqn:Hineq'.
         -- apply Z.ltb_lt in Hineq'.
-           destruct H_conds; unfold MAX_ADDRESS in *; lia.
+           destruct H_conds, H_envNextAddrConsistent ; unfold MAX_ADDRESS in *; lia.
         -- reflexivity.
     + unfold MAX_ADDRESS. unfold UINT_MAX. lia.
   - destruct H_conds; lia.
-  - destruct H_conds; lia.
-  - destruct H_conds; lia.
+  - destruct H_conds, H_envNextAddrConsistent; lia.
+  - destruct H_conds, H_envNextAddrConsistent; lia.
 Qed.
 
 Theorem deltas: forall x1 x2 y1 y2,
@@ -892,7 +893,7 @@ Proof.
   split. assert (invariantInit Amm_balance_ge_reserve_0_AssistedProp); eapply Amm_balance_ge_reserve_0_init; eassumption.
   split. assert (invariantInit Amm_balance_ge_reserve_1_AssistedProp); eapply Amm_balance_ge_reserve_1_init; eassumption.
   eapply initialSupply; [| eassumption].
-  destruct Hconstr as [? H_conds ? ?], H_conds; assumption.
+  destruct Hconstr as [? H_conds ? ?], H_conds, H_envNextAddrConsistent; assumption.
 Qed.
 
 Lemma Amm_liqs_sum_eq_total_step : invariantStep Amm_liqs_sum_eq_total_AssistedProp.
@@ -926,7 +927,7 @@ Proof.
       rewrite balanceOf_sum_thm' with (x := Caller ENV) (f' := balanceOf STATE').
       * destruct H; simpl; rewrite Z.eqb_refl; lia.
       * destruct H; simpl; intros; rewrite_eqbs; reflexivity.
-      * destruct H; simpl; unfold MAX_ADDRESS; destruct H_conds; lia.
+      * destruct H; simpl; unfold MAX_ADDRESS; destruct H_conds, H_envNextAddrConsistent; lia.
     + (* transfer *)
       apply deltas with (x1 := balanceOf_sum STATE) (y1 := totalSupply STATE); [assumption|].
       unfold balanceOf_sum. simpl.
@@ -934,7 +935,7 @@ Proof.
       * destruct H; simpl; lia.
       * destruct H; simpl; intros; rewrite_eqbs; reflexivity.
       * destruct H; simpl; rewrite_eqbs; repeat rewrite Z.eqb_refl; lia.
-      * destruct H; simpl; unfold MAX_ADDRESS; destruct H_conds; lia.
+      * destruct H; simpl; unfold MAX_ADDRESS; destruct H_conds, H_envNextAddrConsistent; lia.
       * destruct H; simpl; unfold MAX_ADDRESS; destruct H_conds; lia.
     + (* transferFrom *)
       apply deltas with (x1 := balanceOf_sum STATE) (y1 := totalSupply STATE); [assumption|].

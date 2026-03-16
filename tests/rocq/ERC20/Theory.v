@@ -234,7 +234,7 @@ Proof.
   - destruct Hinit as [ENV ? ? ? Hcnstr].
     eapply initialSupply.
     2: eassumption.
-    destruct Hcnstr as [? Hinit _ _], Hinit.
+    destruct Hcnstr as [? Hinit _ ?], Hinit, H_envNextAddrConsistent.
     unfold MAX_ADDRESS.
     split; lia.
 
@@ -255,7 +255,7 @@ Proof.
       * destruct H; simpl; lia.
       * destruct H; simpl; intros; rewrite_eqbs; reflexivity.
       * destruct H; simpl; rewrite_eqbs; repeat rewrite Z.eqb_refl; lia.
-      * destruct H; simpl; unfold MAX_ADDRESS; destruct H_conds; lia.
+      * destruct H; simpl; unfold MAX_ADDRESS; destruct H_conds, H_envNextAddrConsistent; lia.
       * destruct H; simpl; unfold MAX_ADDRESS; destruct H_conds; lia.
     + (* transferFrom *)
       apply deltas with (x1 := balanceOf_sum STATE) (y1 := totalSupply STATE); [assumption|].
@@ -274,7 +274,7 @@ Proof.
       rewrite balanceOf_sum_thm' with (x := Caller ENV) (f' := balanceOf STATE').
       * destruct H; simpl; rewrite Z.eqb_refl; lia.
       * destruct H; simpl; intros; rewrite_eqbs; reflexivity.
-      * destruct H; simpl; unfold MAX_ADDRESS; destruct H_conds; lia.
+      * destruct H; simpl; unfold MAX_ADDRESS; destruct H_conds, H_envNextAddrConsistent; lia.
     + (* burnFrom *)
       apply deltas with (x1 := balanceOf_sum STATE) (y1 := totalSupply STATE); [assumption|].
       unfold balanceOf_sum. simpl.
