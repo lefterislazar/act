@@ -4,7 +4,6 @@ constructor(address<Token> t0, address<Token> t1, uint256 liquidity)
 
 iff
 
-    //THIS != CALLER
     address(t0) != address(t1)
     liquidity > 0
     // Unfortunately this limits the max liquidity size quite a bit ...
