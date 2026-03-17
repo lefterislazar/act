@@ -41,7 +41,8 @@ Ltac rewrite_eqs :=
 
 Ltac rewrite_b_right H :=
   match goal with
-  | [ H : _ =? _ = true |- _ ] => apply Z.eqb_eq in H as H'; rewrite <- H' in * 
+  | [ H : _ =? _ = true |- _ ] => apply Z.eqb_eq in H as H'; rewrite <- H' in *
+
     end.
 
 Ltac rewrite_b_left H :=
@@ -169,7 +170,7 @@ Proof.
   - lia.
 Qed.
 
-  
+
 Lemma ERC20_allowance_zero :
   forall (Before : address) (ENV : Env) (T : Token.State) (a : address),
     Token.reachableBefore Before T
@@ -178,8 +179,10 @@ Lemma ERC20_allowance_zero :
 Proof.
   intros Before ENV T a HreachBefore.
   destruct HreachBefore as [T_Init [HinitBefore HmultiBefore]].
-  apply step_multi_step 
-  with (P := fun s s' => (Before <= a -> forall i : address, Token.allowance s a i = 0) -> 
+  apply step_multi_step
+
+  with (P := fun s s' => (Before <= a -> forall i : address, Token.allowance s a i = 0) ->
+
                          Before <= a -> forall i : address, Token.allowance s' a i = 0) in HmultiBefore.
     - destruct HinitBefore as [? ? ? ? Hinit H_leq_before].
       apply HmultiBefore.
@@ -194,7 +197,8 @@ Proof.
           -- apply Z.eqb_eq in H_a_eq_src. rewrite <- H_a_eq_src. intros.
             assert (Token.allowance s a (Caller ENV') = 0). auto.
             assert (Caller ENV' <> src) as H_caller_neq_src. { destructAnds. assumption. }
-            destruct H_conds. apply H_iff3 in H_caller_neq_src. 
+            destruct H_conds. apply H_iff3 in H_caller_neq_src.
+
             assert (amount = 0). { apply Z.le_antisymm; try lia.
               rewrite <- H_a_eq_src in H_caller_neq_src. rewrite H0 in H_caller_neq_src. lia.
             }
@@ -204,7 +208,8 @@ Proof.
           -- apply Z.eqb_eq in H_a_eq_src. rewrite <- H_a_eq_src. intros.
             assert (Token.allowance s a (Caller ENV') = 0); auto.
             assert (Caller ENV' <> src) as H_caller_neq_src. { destructAnds. assumption. }
-            destruct H_conds. apply H_iff3 in H_caller_neq_src. 
+            destruct H_conds. apply H_iff3 in H_caller_neq_src.
+
             assert (amount = 0). { apply Z.le_antisymm; try lia.
               rewrite <- H_a_eq_src in H_caller_neq_src. rewrite H0 in H_caller_neq_src. lia.
             }
@@ -216,7 +221,7 @@ Proof.
           intro H_NA_leq_x.
           assert (Caller ENV' < a). {
             apply Z.lt_le_trans with (m := NextAddr).
-            * assumption.
+            * destruct H_envNextAddrConsistent; assumption.
             * lia.
           }
           assert (a =? Caller ENV' = false). simpl. lia.
@@ -228,7 +233,8 @@ Proof.
           -- apply Z.eqb_eq in H_a_eq_src. rewrite <- H_a_eq_src. intros.
             assert (Token.allowance s a (Caller ENV') = 0). auto.
             assert (Caller ENV' <> src) as H_caller_neq_src. { destructAnds. assumption. }
-            destruct H_conds. apply H_iff3 in H_caller_neq_src. 
+            destruct H_conds. apply H_iff3 in H_caller_neq_src.
+
             assert (amount = 0). { apply Z.le_antisymm; try lia.
               rewrite <- H_a_eq_src in H_caller_neq_src. rewrite H0 in H_caller_neq_src. lia.
             }
@@ -244,11 +250,8 @@ Definition Amm_allowance_zero_Prop (ENV : Env) (T0 T1 : Token.State) (L : Z) (Ne
   -> Token.allowance (Amm.token0 STATE) (Amm.addr STATE) i = 0 /\
     Token.allowance (Amm.token1 STATE) (Amm.addr STATE) i = 0.
 
-Definition Amm_const_addr_Prop (ENV : Env) (T0 T1 : Token.State) (L : Z) (NextAddr : address) (STATE : State) : Prop :=
-  This ENV = Amm.addr STATE.
-
 Definition Amm_liq_incr_Prop  (ENV : Env) (T0 T1 : Token.State) (L : Z) (NextAddr : address) (STATE : State) : Prop :=
-  ((((Token.balanceOf T0) (This ENV)) * ((Token.balanceOf T1) (This ENV))) <= (((Token.balanceOf (Amm.token0 STATE)) (This ENV)) * ((Token.balanceOf (Amm.token1 STATE)) (This ENV)))).
+  ((((Token.balanceOf T0) (addr STATE)) * ((Token.balanceOf T1) (addr STATE))) <= (((Token.balanceOf (Amm.token0 STATE)) (addr STATE)) * ((Token.balanceOf (Amm.token1 STATE)) (addr STATE)))).
 
 Definition Amm_balance_ge_reserve_0_Prop (ENV: Env) (T0 T1 : Token.State) (L : Z) (NextAddr : address) (STATE : State) : Prop :=
   reserve0 STATE <= Token.balanceOf (token0 STATE) (addr STATE).
@@ -258,7 +261,6 @@ Definition Amm_balance_ge_reserve_1_Prop (ENV: Env) (T0 T1 : Token.State) (L : Z
 
 Definition IP (ENV : Env) (T0 T1 : Token.State) (L : Z) (NextAddr : address) (STATE : State) : Prop :=
   Amm_allowance_zero_Prop ENV T0 T1 L NextAddr STATE
-  /\ Amm_const_addr_Prop ENV T0 T1 L NextAddr STATE
   /\ Amm_liq_incr_Prop ENV T0 T1 L NextAddr STATE.
 
 Lemma Amm_allowance_zero_init : invariantInit Amm_allowance_zero_Prop.
@@ -289,9 +291,10 @@ Proof.
   intros ENV0 T0 T1 L NextAddr0 STATE0 STATE0' HinitPrecs Hstep Hyp i Hi_neq.
   destruct Hstep as [ENV0' [NextAddr [NextAddr' Htransition]]].
   destruct Htransition
-    as [ 
-       | _ _ Hcaller_cnstr _ HTokenTransition Haddr_const _ _ _ _ _ Htk1_const
-       | _ _ Hcaller_cnstr _ HTokenTransition Haddr_const _ _ _ _ _ Htk0_const].
+    as [
+
+       | H_stateConsistent HTokenTransition Haddr_const _ _ _ _ _ Htk1_const
+       | H_stateConsistent HTokenTransition Haddr_const _ _ _ _ _ Htk0_const].
   - destruct H; destruct H; simpl; auto.
   - destruct HTokenTransition; destruct H0; rewrite <- Haddr_const in *; rewrite <- Htk1_const.
     + destruct H0; simpl; auto.
@@ -331,8 +334,8 @@ Proof.
       destruct H0; simpl.
       * assert (Caller ENV0' =? addr STATE0 = false). {
           rewrite Z.eqb_neq.
-          destruct H_conds.
-          apply Hcaller_cnstr.
+          destruct H_conds, H_stateConsistent.
+          apply H_no_self_call.
           constructor. }
         rewrite Z.eqb_sym in H0; rewrite H0.
         apply Hyp; auto.
@@ -397,8 +400,8 @@ Proof.
       destruct H0; simpl.
       * assert (Caller ENV0' =? addr STATE0 = false). {
           rewrite Z.eqb_neq.
-          destruct H_conds.
-          apply Hcaller_cnstr.
+          destruct H_conds, H_stateConsistent.
+          apply H_no_self_call.
           constructor. }
         rewrite Z.eqb_sym in H0; rewrite H0.
         apply Hyp; auto.
@@ -426,32 +429,8 @@ Proof.
     + destruct H0; simpl; auto.
 Qed.
 
-Lemma Amm_addr_constant_init : invariantInit Amm_const_addr_Prop.
-Proof.
-  intros ENV t0 t1 L NextAddr STATE STATE' Hconstr.
-  destruct Hconstr.
-  unfold Amm_const_addr_Prop.
-  simpl.
-  destruct H_conds.
-  auto.
-Qed.
-
-Lemma Amm_addr_constant_step : invariantStep Amm_const_addr_Prop.
-Proof.
-  intros ENV0 T0 T1 L NextAddr0 STATE STATE' HinitPrecs Hstep Hyp.
-  unfold Amm_const_addr_Prop.
-  destruct Hstep as [ENV [NextAddr [NextAddr' Htransition]]].
-  destruct Htransition
-    as [ HAmmStep
-       | Hnac Horgc Hcallerc _ HTokenExtStep Haddr_const _ _ _ _ _ Htk1_const
-       | Hnac Horgc Hcallerc _ HTokenExtStep Haddr_const _ _ _ _ _ Htk0_const ].
-  - destruct HAmmStep; destruct H; auto.
-  - destruct HTokenExtStep; rewrite <- Haddr_const; simpl; auto.
-  - destruct HTokenExtStep; rewrite <- Haddr_const; simpl; auto.
-Qed.
 
 Definition Amm_balance_ge_reserve_0_AssistedProp (ENV: Env) (T0 T1 : Token.State) (L : Z) (NextAddr : address) (STATE : State) : Prop :=
-  Amm_const_addr_Prop ENV T0 T1 L NextAddr STATE /\
   Amm_allowance_zero_Prop ENV T0 T1 L NextAddr STATE /\
   Amm_balance_ge_reserve_0_Prop ENV T0 T1 L NextAddr STATE.
 
@@ -459,72 +438,75 @@ Lemma Amm_balance_ge_reserve_0_init : invariantInit Amm_balance_ge_reserve_0_Ass
 Proof.
   intros ENV t0 t1 L NextAddr STATE NextAddr' Hconstr.
   unfold Amm_balance_ge_reserve_0_AssistedProp, Amm_balance_ge_reserve_0_Prop.
-  split. assert (invariantInit Amm_const_addr_Prop); eapply Amm_addr_constant_init. eassumption.
   split. assert (invariantInit Amm_allowance_zero_Prop); eapply Amm_allowance_zero_init; eassumption.
-  destruct Hconstr, H_conds; simpl. auto.
-  rewrite H_This_eq_NextAddr.
+  destruct Hconstr, H_conds, H_envNextAddrConsistent; simpl.
   reflexivity.
 Qed.
 
 Lemma Amm_balance_ge_reserve_0_step : invariantStep Amm_balance_ge_reserve_0_AssistedProp.
 Proof.
-  intros ENV0 t0 t1 L NextAddr0 STATE STATE' H_conds0 Hstep [Hyp1 [Hyp2 Hyp3]].
+  intros ENV0 t0 t1 L NextAddr0 STATE STATE' H_conds0 Hstep [Hyp1 Hyp2].
   unfold Amm_balance_ge_reserve_0_AssistedProp, Amm_balance_ge_reserve_0_Prop.
-  split. assert (invariantStep Amm_const_addr_Prop); eapply Amm_addr_constant_step; eassumption.
   split. assert (invariantStep Amm_allowance_zero_Prop); eapply Amm_allowance_zero_step; eassumption.
   simpl.
   destruct Hstep as [ENV [NextAddr [NextAddr' Htransition]]].
   destruct Htransition
     as [ HAmmStep
-       | Hnac Horgc Hcallerc _ HTokenTransition Haddr_const _ _ _ Hres0_const _ Htk1_const
-       | Hnac Horgc Hcallerc _ HTokenTransition Haddr_const _ _ _ Hres0_const _ Htk0_const ].
+       | HstateConsistent HTokenTransition Haddr_const _ _ _ Hres0_const _ Htk1_const
+       | HstateConsistent HTokenTransition Haddr_const _ _ _ Hres0_const _ Htk0_const ].
   - destruct HAmmStep; auto; try now (destruct H; simpl; auto).
-    + (* swap0 *)
-      destruct H; destruct H_conds; simpl; rewrite <- H_This_eq_addState; reflexivity.
     + (* swap1 *)
-      destruct H; destruct H_conds; simpl; [ rewrite_eqbs | rewrite H_This_eq_addState ]; reflexivity.
-    + (* mint *)
-      destruct H; destruct H_conds; rewrite H_This_eq_addState; simpl; reflexivity.
+      destruct H; destruct H_conds, H_stateConsistent; simpl; rewrite_eqbs. rewrite Z.eqb_refl. reflexivity. reflexivity.
     + (* burn *)
-      destruct H; destruct H_conds; simpl; [ rewrite_eqbs | rewrite H_This_eq_addState ]; reflexivity.  
+      destruct H; destruct H_conds, H_stateConsistent; simpl; rewrite_eqbs. rewrite Z.eqb_refl. reflexivity. reflexivity.
   - assert (addr STATE <> Caller ENV) as H_addrState_neq_caller;
-      [apply Z.neq_sym; apply Hcallerc; constructor|].
+      [apply Z.neq_sym; destruct HstateConsistent; apply H_no_self_call; constructor|].
     rewrite <- Haddr_const, <- Hres0_const.
     destruct HTokenTransition as [HTokenTransition]; destruct HTokenTransition; try now (destruct H0; simpl; auto).
     + (* transfer *)
       destruct H0; simpl; auto.
       * rewrite_eqbs.
         destruct (addr STATE =? to) eqn:Hifcond0; simpl; auto.
-        -- eapply Z.le_trans. apply Hyp3. apply Z.eqb_eq in Hifcond0; rewrite Hifcond0. destruct H_conds; lia. 
+        -- eapply Z.le_trans. apply Hyp2. apply Z.eqb_eq in Hifcond0; rewrite Hifcond0. destruct H_conds; lia.
+
     +  (* transferFrom *)
       destruct H0; simpl; auto.
       * destruct (addr STATE =? src) eqn:Hifcond0, (addr STATE =? dst) eqn:Hifcond1.
         -- assert (amount = 0); lia.
         -- assert (amount = 0); lia.
-        -- eapply Z.le_trans. apply Hyp3. rewrite_b_right Hifcond1. destruct H_conds; lia. 
-        -- apply Hyp3.
+        -- eapply Z.le_trans. apply Hyp2. rewrite_b_right Hifcond1. destruct H_conds; lia.
+
+        -- apply Hyp2.
       * destruct (addr STATE =? src) eqn:Hifcond0, (addr STATE =? dst) eqn:Hifcond1.
         -- assert (amount = 0); lia.
-        -- destruct H_conds. 
+        -- destruct H_conds.
+
           rewrite_b_right Hif_cond0.
           assert (amount = 0). {
-            assert (Token.allowance (token0 STATE) (addr STATE) (Caller ENV) = 0); [apply Hyp2; auto|].
+            assert (Token.allowance (token0 STATE) (addr STATE) (Caller ENV) = 0). {
+              apply Hyp1. auto.
+            }
             rewrite H0 in H_iff3. lia.
-          }   
-          rewrite H0. unfold Amm_balance_ge_reserve_0_Prop in *. rewrite Hyp3; lia.
-        -- eapply Z.le_trans. apply Hyp3. rewrite_b_right Hifcond1. destruct H_conds; lia. 
-        -- apply Hyp3.
+          }
+
+          rewrite H0. unfold Amm_balance_ge_reserve_0_Prop in *. rewrite Hyp2; lia.
+        -- eapply Z.le_trans. apply Hyp2. rewrite_b_right Hifcond1. destruct H_conds; lia.
+
+        -- apply Hyp2.
       * destruct (addr STATE =? src) eqn:Hifcond0, (addr STATE =? dst) eqn:Hifcond1.
         -- assert (amount = 0); lia.
-        -- destruct H_conds. 
+        -- destruct H_conds.
+
           rewrite_b_right Hif_cond0.
           assert (amount = 0). {
-            assert (Token.allowance (token0 STATE) (addr STATE) (Caller ENV) = 0); [apply Hyp2; auto|].
+            assert (Token.allowance (token0 STATE) (addr STATE) (Caller ENV) = 0); [apply Hyp1; auto|].
             rewrite H0 in H_iff3. lia.
-          }   
-          rewrite H0. unfold Amm_balance_ge_reserve_0_Prop in *. rewrite Hyp3; lia.
-        -- eapply Z.le_trans. apply Hyp3. apply Z.eqb_eq in Hifcond1; rewrite Hifcond1. destruct H_conds; lia. 
-        -- apply Hyp3.
+          }
+
+          rewrite H0. unfold Amm_balance_ge_reserve_0_Prop in *. rewrite Hyp2; lia.
+        -- eapply Z.le_trans. apply Hyp2. apply Z.eqb_eq in Hifcond1; rewrite Hifcond1. destruct H_conds; lia.
+
+        -- apply Hyp2.
     +  (* burn *)
       destruct H0; simpl; auto.
       * rewrite_eqbs. auto.
@@ -532,13 +514,13 @@ Proof.
       destruct H0; simpl; auto.
       * destruct (addr STATE =? src) eqn:Hifcond.
         -- assert (amount = 0). { destruct H_conds.
-            bool_to_prop. rewrite <- Hifcond in H_iff3. unfold Amm_allowance_zero_Prop in Hyp2. specialize Hyp2 with (i := Caller ENV) as Hyp2'. lia. }
-            rewrite H0. rewrite_b_right Hifcond. unfold Amm_balance_ge_reserve_0_Prop in Hyp3. lia.
+            bool_to_prop. rewrite <- Hifcond in H_iff3. unfold Amm_allowance_zero_Prop in Hyp1. specialize Hyp1 with (i := Caller ENV) as Hyp2'. lia. }
+            rewrite H0. rewrite_b_right Hifcond. unfold Amm_balance_ge_reserve_0_Prop in Hyp2. lia.
         -- destruct H; simpl; auto.
       * destruct (addr STATE =? src) eqn:Hifcond.
         -- assert (amount = 0). { destruct H_conds.
-            bool_to_prop. rewrite <- Hifcond in H_iff3. unfold Amm_allowance_zero_Prop in Hyp2. specialize Hyp2 with (i := Caller ENV) as Hyp2'. lia. }
-            rewrite H0. rewrite_b_right Hifcond. unfold Amm_balance_ge_reserve_0_Prop in Hyp3. lia.
+            bool_to_prop. rewrite <- Hifcond in H_iff3. unfold Amm_allowance_zero_Prop in Hyp1. specialize Hyp1 with (i := Caller ENV) as Hyp2'. lia. }
+            rewrite H0. rewrite_b_right Hifcond. unfold Amm_balance_ge_reserve_0_Prop in Hyp2. lia.
         -- destruct H; simpl; auto.
       * destruct (addr STATE =? src) eqn:Hifcond.
         -- assert (amount = 0); lia.
@@ -547,14 +529,15 @@ Proof.
       destruct H0; simpl; auto.
       * rewrite_eqbs.
         destruct (addr STATE =? dst) eqn:Hifcond0; simpl; auto.
-        -- eapply Z.le_trans. apply Hyp3. apply Z.eqb_eq in Hifcond0; rewrite Hifcond0. destruct H_conds; lia. 
-  - destruct HTokenTransition; 
+        -- eapply Z.le_trans. apply Hyp2. apply Z.eqb_eq in Hifcond0; rewrite Hifcond0. destruct H_conds; lia.
+
+  - destruct HTokenTransition;
+
     simpl; rewrite <- Haddr_const, <- Hres0_const, <- Htk0_const; assumption.
 Qed.
 
 
 Definition Amm_balance_ge_reserve_1_AssistedProp (ENV: Env) (T0 T1 : Token.State) (L : Z) (NextAddr : address) (STATE : State) : Prop :=
-  Amm_const_addr_Prop ENV T0 T1 L NextAddr STATE /\
   Amm_allowance_zero_Prop ENV T0 T1 L NextAddr STATE /\
   Amm_balance_ge_reserve_1_Prop ENV T0 T1 L NextAddr STATE.
 
@@ -562,97 +545,100 @@ Lemma Amm_balance_ge_reserve_1_init : invariantInit Amm_balance_ge_reserve_1_Ass
 Proof.
   intros ENV t0 t1 L NextAddr0 STATE NextAddr0' Hconstr.
   unfold Amm_balance_ge_reserve_1_AssistedProp, Amm_balance_ge_reserve_1_Prop.
-  split. assert (invariantInit Amm_const_addr_Prop); eapply Amm_addr_constant_init; eassumption.
   split. assert (invariantInit Amm_allowance_zero_Prop); eapply Amm_allowance_zero_init; eassumption.
-  destruct Hconstr, H_conds; simpl. auto.
-  rewrite H_This_eq_NextAddr.
+  destruct Hconstr, H_conds, H_envNextAddrConsistent; simpl.
   reflexivity.
 Qed.
 
 Lemma Amm_balance_ge_reserve_1_step : invariantStep Amm_balance_ge_reserve_1_AssistedProp.
 Proof.
-  intros ENV0 t0 t1 L NextAddr0 STATE STATE' H_conds0 Hstep [Hyp1 [Hyp2 Hyp3]].
+  intros ENV0 t0 t1 L NextAddr0 STATE STATE' H_conds0 Hstep [Hyp1 Hyp2].
   unfold Amm_balance_ge_reserve_1_AssistedProp, Amm_balance_ge_reserve_1_Prop.
-  split. assert (invariantStep Amm_const_addr_Prop); eapply Amm_addr_constant_step; eassumption.
   split. assert (invariantStep Amm_allowance_zero_Prop); eapply Amm_allowance_zero_step; eassumption.
   simpl.
   destruct Hstep as [ENV [NextAddr [NextAddr' Htransition]]].
   destruct Htransition
     as [ HAmmStep
-       | Hnac Horgc Hcallerc _ HTokenTransition Haddr_const _ _ _ _ Hres1_const Htk1_const
-       | Hnac Horgc Hcallerc _ HTokenTransition Haddr_const _ _ _ _ Hres1_const Htk0_const ].
+       | HstateConsistent HTokenTransition Haddr_const _ _ _ _ Hres1_const Htk1_const
+       | HstateConsistent HTokenTransition Haddr_const _ _ _ _ Hres1_const Htk0_const ].
   - destruct HAmmStep; auto; try now (destruct H; simpl; auto).
     + (* swap0 *)
-      destruct H; destruct H_conds; simpl; [ rewrite_eqbs | rewrite H_This_eq_addState ]; reflexivity.
-    + (* swap1 *)
-      destruct H; destruct H_conds; simpl; rewrite <- H_This_eq_addState; reflexivity.
-    + (* mint *)
-      destruct H; destruct H_conds; rewrite H_This_eq_addState; simpl; reflexivity.
+      destruct H; destruct H_conds, H_stateConsistent; simpl; rewrite_eqbs. rewrite Z.eqb_refl. reflexivity. reflexivity.
     + (* burn *)
-      destruct H; destruct H_conds; simpl; [ rewrite_eqbs | rewrite H_This_eq_addState ]; reflexivity.  
-  - destruct HTokenTransition; 
+      destruct H; destruct H_conds, H_stateConsistent; simpl; rewrite_eqbs. rewrite Z.eqb_refl. reflexivity. reflexivity.
+  - destruct HTokenTransition;
+
     simpl; rewrite <- Haddr_const, <- Hres1_const, <- Htk1_const; assumption.
   - assert (addr STATE <> Caller ENV) as H_addrState_neq_caller;
-      [apply Z.neq_sym; apply Hcallerc; constructor|].
+      [apply Z.neq_sym; destruct HstateConsistent; apply H_no_self_call; constructor|].
     rewrite <- Haddr_const, <- Hres1_const.
     destruct HTokenTransition as [HTokenTransition]; destruct HTokenTransition; try now (destruct H0; simpl; auto).
     + (* transfer *)
       destruct H0; simpl; auto.
       * rewrite_eqbs.
         destruct (addr STATE =? to) eqn:Hifcond0; simpl; auto.
-        -- eapply Z.le_trans. apply Hyp3. apply Z.eqb_eq in Hifcond0; rewrite Hifcond0. destruct H_conds; lia. 
+        -- eapply Z.le_trans. apply Hyp2. apply Z.eqb_eq in Hifcond0; rewrite Hifcond0. destruct H_conds; lia.
+
     +  (* transferFrom *)
       destruct H0; simpl; auto.
       * destruct (addr STATE =? src) eqn:Hifcond0, (addr STATE =? dst) eqn:Hifcond1.
         -- assert (amount = 0); lia.
         -- assert (amount = 0); lia.
-        -- eapply Z.le_trans. apply Hyp3. rewrite_b_right Hifcond1. destruct H_conds; lia. 
-        -- apply Hyp3.
+        -- eapply Z.le_trans. apply Hyp2. rewrite_b_right Hifcond1. destruct H_conds; lia.
+
+        -- apply Hyp2.
       * destruct (addr STATE =? src) eqn:Hifcond0, (addr STATE =? dst) eqn:Hifcond1.
         -- assert (amount = 0); lia.
-        -- destruct H_conds. 
+        -- destruct H_conds.
+
           rewrite_b_right Hif_cond0.
           assert (amount = 0). {
-            assert (Token.allowance (token1 STATE) (addr STATE) (Caller ENV) = 0); [apply Hyp2; auto|].
+            assert (Token.allowance (token1 STATE) (addr STATE) (Caller ENV) = 0); [apply Hyp1; auto|].
             rewrite H0 in H_iff3. lia.
-          }   
-          rewrite H0. unfold Amm_balance_ge_reserve_1_Prop in *. rewrite Hyp3; lia.
-        -- eapply Z.le_trans. apply Hyp3. rewrite_b_right Hifcond1. destruct H_conds; lia. 
-        -- apply Hyp3.
+          }
+
+          rewrite H0. unfold Amm_balance_ge_reserve_1_Prop in *. rewrite Hyp2; lia.
+        -- eapply Z.le_trans. apply Hyp2. rewrite_b_right Hifcond1. destruct H_conds; lia.
+
+        -- apply Hyp2.
       * destruct (addr STATE =? src) eqn:Hifcond0, (addr STATE =? dst) eqn:Hifcond1.
         -- assert (amount = 0); lia.
-        -- destruct H_conds. 
+        -- destruct H_conds.
+
           rewrite_b_right Hif_cond0.
           assert (amount = 0). {
-            assert (Token.allowance (token1 STATE) (addr STATE) (Caller ENV) = 0); [apply Hyp2; auto|].
+            assert (Token.allowance (token1 STATE) (addr STATE) (Caller ENV) = 0); [apply Hyp1; auto|].
             rewrite H0 in H_iff3. lia.
-          }   
-          rewrite H0. unfold Amm_balance_ge_reserve_1_Prop in *. rewrite Hyp3; lia.
-        -- eapply Z.le_trans. apply Hyp3. apply Z.eqb_eq in Hifcond1; rewrite Hifcond1. destruct H_conds; lia. 
-        -- apply Hyp3.
+          }
+
+          rewrite H0. unfold Amm_balance_ge_reserve_1_Prop in *. rewrite Hyp2; lia.
+        -- eapply Z.le_trans. apply Hyp2. apply Z.eqb_eq in Hifcond1; rewrite Hifcond1. destruct H_conds; lia.
+
+        -- apply Hyp2.
     + (* burn *)
       destruct H0; simpl; auto.
-      * rewrite_eqbs. apply Hyp3.
+      * rewrite_eqbs. apply Hyp2.
     + (* burnFrom *)
       destruct H0; simpl; auto.
       * destruct (addr STATE =? src) eqn:Hifcond.
         -- assert (amount = 0). { destruct H_conds.
-            bool_to_prop. rewrite <- Hifcond in H_iff3. unfold Amm_allowance_zero_Prop in Hyp2. specialize Hyp2 with (i := Caller ENV) as Hyp2'. lia. }
-            rewrite H0. rewrite_b_right Hifcond. unfold Amm_balance_ge_reserve_1_Prop in Hyp3. lia.
-        -- apply Hyp3.
+            bool_to_prop. rewrite <- Hifcond in H_iff3. unfold Amm_allowance_zero_Prop in Hyp1. specialize Hyp1 with (i := Caller ENV) as Hyp2'. lia. }
+            rewrite H0. rewrite_b_right Hifcond. unfold Amm_balance_ge_reserve_1_Prop in Hyp2. lia.
+        -- apply Hyp2.
       * destruct (addr STATE =? src) eqn:Hifcond.
         -- assert (amount = 0). { destruct H_conds.
-            bool_to_prop. rewrite <- Hifcond in H_iff3. unfold Amm_allowance_zero_Prop in Hyp2. specialize Hyp2 with (i := Caller ENV) as Hyp2'. lia. }
-            rewrite H0. rewrite_b_right Hifcond. unfold Amm_balance_ge_reserve_1_Prop in Hyp3. lia.
-        -- apply Hyp3.
+            bool_to_prop. rewrite <- Hifcond in H_iff3. unfold Amm_allowance_zero_Prop in Hyp1. specialize Hyp1 with (i := Caller ENV) as Hyp2'. lia. }
+            rewrite H0. rewrite_b_right Hifcond. unfold Amm_balance_ge_reserve_1_Prop in Hyp2. lia.
+        -- apply Hyp2.
       * destruct (addr STATE =? src) eqn:Hifcond.
         -- assert (amount = 0); lia.
-        -- apply Hyp3.
+        -- apply Hyp2.
     + (* mint *)
       destruct H0; simpl; auto.
       * destruct (addr STATE =? dst) eqn:Hifcond.
-        -- eapply Z.le_trans. apply Hyp3. rewrite_b_right Hifcond1. destruct H_conds; lia. 
-        -- apply Hyp3.
+        -- eapply Z.le_trans. apply Hyp2. rewrite_b_right Hifcond1. destruct H_conds; lia.
+
+        -- apply Hyp2.
 Qed.
 
 
@@ -784,62 +770,62 @@ Qed.
 
 Theorem initialSupply': forall ENV _totalSupply t0 t1 NextAddr State NextAddr' (n : nat),
     0 <= Caller ENV ->
-    0 <= This ENV ->
-    Caller ENV < This ENV ->
+    Caller ENV < NextAddr ->
     constructor ENV t0 t1 _totalSupply NextAddr State NextAddr' ->
     balanceOf_sum' (balanceOf (State)) n 0 =
     if (Z.of_nat n <? (Caller ENV)) then 0 else
-    if (Z.of_nat n <? (This ENV)) then totalSupply State - 1000 else
+    if (Z.of_nat n <? (NextAddr)) then totalSupply State - 1000 else
     totalSupply State.
 Proof.
-  intros ENV ? ? ? ? ? ? ? _ _ _ Hcnstr.
-  destruct Hcnstr as [? H_conds _ _]; simpl.
+  intros ENV ? ? ? ? ? ? ? _ _ Hcnstr.
+  destruct Hcnstr as [? H_conds _ ? _]; simpl.
 
   assert (forall n : nat, Z.of_nat n < Caller ENV ->
-      balanceOf_sum' (fun _binding_0 : address => if _binding_0 =? This ENV then 1000 else if _binding_0 =? Caller ENV then _totalSupply - 1000 else 0) n 0 = 0) as H0.
+      balanceOf_sum' (fun _binding_0 : address => if _binding_0 =? NextAddr then 1000 else if _binding_0 =? Caller ENV then _totalSupply - 1000 else 0) n 0 = 0) as H0.
   { intros. induction n0.
-    - simpl. destruct H_conds. destruct (Caller ENV), (This ENV); lia; discriminate.
-    - simpl. rewrite -> balanceOf_sum_acc. destruct H_conds.
+    - simpl. destruct H_conds, H_envNextAddrConsistent. destruct (Caller ENV), (NextAddr); lia; discriminate.
+    - simpl. rewrite -> balanceOf_sum_acc. destruct H_conds, H_envNextAddrConsistent.
       destruct (Z.of_nat (S n0) =? Caller ENV) eqn:Heq.
       + apply Z.eqb_eq in Heq. apply Z.lt_neq in H. contradiction.
       + rewrite IHn0.
-        * destruct (Z.of_nat (S n0) =? This ENV) eqn:Heq'; try lia.
+        * destruct (Z.of_nat (S n0) =? NextAddr) eqn:Heq'; try lia.
           -- apply Z.eqb_eq in Heq'. lia.
         * lia.
   }
 
   induction n.
-  - destruct H_conds; simpl.
+  - destruct H_conds, H_envNextAddrConsistent; simpl.
     assert (forall p, Z.of_nat 0 <? Z.pos p = true) as Hmy; [auto|].
-    destruct (Caller ENV) eqn:Hcaller, (This ENV) eqn:Hthis; try lia.
+    destruct (Caller ENV) eqn:Hcaller, (NextAddr) eqn:Hthis; try lia.
     + rewrite Z.ltb_irrefl; rewrite Hmy; lia.
     + rewrite Hmy; lia.
   - simpl. rewrite balanceOf_sum_acc.
     destruct (Z.of_nat (S n) <? Caller ENV) eqn:Hlt.
     + destruct (Z.of_nat (S n) =? Caller ENV) eqn:Heq. * lia.
       * rewrite H0.
-        -- destruct (Z.of_nat (S n) =? This ENV) eqn:Heq'; try lia.
-          ++ destruct H_conds. apply Z.eqb_eq in Heq'. apply Z.ltb_lt in Hlt. lia.
+        -- destruct (Z.of_nat (S n) =? NextAddr) eqn:Heq'; try lia.
+          ++ destruct H_conds, H_envNextAddrConsistent. apply Z.eqb_eq in Heq'. apply Z.ltb_lt in Hlt. lia.
         -- apply Z.ltb_lt in Hlt. lia.
     + destruct (Z.of_nat (S n) =? Caller ENV) eqn:Heq.
       * rewrite H0.
-        -- destruct (Z.of_nat (S n) =? This ENV) eqn:Heq'; try lia.
-          ++ destruct H_conds. rewrite_b_left Heq'. lia.
-          ++ destruct (Z.of_nat (S n) <? This ENV) eqn:Hlt'; try lia. 
+        -- destruct (Z.of_nat (S n) =? NextAddr) eqn:Heq'; try lia.
+          ++ destruct H_conds, H_envNextAddrConsistent. rewrite_b_left Heq'. lia.
+          ++ destruct (Z.of_nat (S n) <? NextAddr) eqn:Hlt'; try lia.
+
             apply Z.ltb_ge in Hlt'.
-            apply Z.eqb_eq in Heq. rewrite Heq in *. destruct H_conds. lia.
+            apply Z.eqb_eq in Heq. rewrite Heq in *. destruct H_conds, H_envNextAddrConsistent. lia.
         -- apply Z.eqb_eq in Heq. rewrite <- Heq. lia.
       * rewrite IHn.
         assert ( Z.of_nat n <? Caller ENV = false).
         { apply Z.ltb_ge in Hlt. apply Z.eqb_neq in Heq. lia. }
         rewrite H.
-        destruct (Z.of_nat n <? This ENV) eqn:Hlt', (Z.of_nat (S n) =? This ENV) eqn:Heq'.
-        -- assert (Z.of_nat (S n) <? This ENV = false). lia.
+        destruct (Z.of_nat n <? NextAddr) eqn:Hlt', (Z.of_nat (S n) =? NextAddr) eqn:Heq'.
+        -- assert (Z.of_nat (S n) <? NextAddr = false). lia.
         rewrite H1. lia.
-        -- assert (Z.of_nat (S n) < This ENV) as Hlt''. bool_to_prop. lia.
+        -- assert (Z.of_nat (S n) < NextAddr) as Hlt''. bool_to_prop. lia.
           prop_to_bool. rewrite Hlt''. lia.
         -- bool_to_prop. lia.
-        -- assert (Z.of_nat (S n) <? This ENV = false); [apply Z.ltb_ge; lia|].
+        -- assert (Z.of_nat (S n) <? NextAddr = false); [apply Z.ltb_ge; lia|].
            rewrite H1. lia.
 Qed.
 
@@ -852,18 +838,17 @@ Proof.
   intros.
   unfold balanceOf_sum.
   (*destruct H0 as [? H_conds _ _].*)
-  erewrite -> initialSupply'; try (now eassumption); destruct H0 as [? H_conds _ _].
+  erewrite -> initialSupply'; try (now eassumption); destruct H0 as [? H_conds _ ?].
   - rewrite Z2Nat.id.
     + destruct (MAX_ADDRESS <? Caller ENV) eqn:Hineq.
       * apply Z.ltb_lt in Hineq. lia.
-      * destruct (MAX_ADDRESS <? This ENV) eqn:Hineq'.
+      * destruct (MAX_ADDRESS <? NextAddr) eqn:Hineq'.
         -- apply Z.ltb_lt in Hineq'.
-           destruct H_conds; unfold MAX_ADDRESS in *; lia.
+           destruct H_conds, H_envNextAddrConsistent ; unfold MAX_ADDRESS in *; lia.
         -- reflexivity.
     + unfold MAX_ADDRESS. unfold UINT_MAX. lia.
   - destruct H_conds; lia.
-  - destruct H_conds; lia.
-  - destruct H_conds; lia.
+  - destruct H_conds, H_envNextAddrConsistent; lia.
 Qed.
 
 Theorem deltas: forall x1 x2 y1 y2,
@@ -877,7 +862,6 @@ Definition Amm_liqs_sum_eq_total_Prop (ENV : Env) (T0 T1 : Token.State) (L : Z) 
   balanceOf_sum STATE = totalSupply STATE.
 
 Definition Amm_liqs_sum_eq_total_AssistedProp (ENV: Env) (T0 T1 : Token.State) (L : Z) (NextAddr : address) (STATE : State) : Prop :=
-  Amm_const_addr_Prop ENV T0 T1 L NextAddr STATE /\
   Amm_allowance_zero_Prop ENV T0 T1 L NextAddr STATE /\
   Amm_balance_ge_reserve_0_AssistedProp ENV T0 T1 L NextAddr STATE /\
   Amm_balance_ge_reserve_1_AssistedProp ENV T0 T1 L NextAddr STATE /\
@@ -887,27 +871,25 @@ Lemma Amm_liqs_sum_eq_total_init : invariantInit Amm_liqs_sum_eq_total_AssistedP
 Proof.
   intros ENV t0 t1 L NextAddr State NexrAddr' Hconstr.
   unfold Amm_liqs_sum_eq_total_AssistedProp, Amm_liqs_sum_eq_total_Prop.
-  split. assert (invariantInit Amm_const_addr_Prop); eapply Amm_addr_constant_init; eassumption.
   split. assert (invariantInit Amm_allowance_zero_Prop); eapply Amm_allowance_zero_init; eassumption.
   split. assert (invariantInit Amm_balance_ge_reserve_0_AssistedProp); eapply Amm_balance_ge_reserve_0_init; eassumption.
   split. assert (invariantInit Amm_balance_ge_reserve_1_AssistedProp); eapply Amm_balance_ge_reserve_1_init; eassumption.
   eapply initialSupply; [| eassumption].
-  destruct Hconstr as [? H_conds ? ?], H_conds; assumption.
+  destruct Hconstr as [? H_conds ? ?], H_conds, H_envNextAddrConsistent; assumption.
 Qed.
 
 Lemma Amm_liqs_sum_eq_total_step : invariantStep Amm_liqs_sum_eq_total_AssistedProp.
 Proof.
-  intros ENV0 T0 T1 L NextAddr0 STATE STATE' HinitPrecs Hstep [Hyp1 [Hyp2 [Hyp3 [Hyp4 Hyp5]]]].
+  intros ENV0 T0 T1 L NextAddr0 STATE STATE' HinitPrecs Hstep [Hyp1 [Hyp2 [Hyp3 Hyp4]]].
   unfold Amm_liqs_sum_eq_total_AssistedProp, Amm_liqs_sum_eq_total_Prop in *.
-  split. assert (invariantStep Amm_const_addr_Prop); eapply Amm_addr_constant_step; eassumption.
   split. assert (invariantStep Amm_allowance_zero_Prop); eapply Amm_allowance_zero_step; eassumption.
   split. assert (invariantStep Amm_balance_ge_reserve_0_AssistedProp); eapply Amm_balance_ge_reserve_0_step; eassumption.
   split. assert (invariantStep Amm_balance_ge_reserve_1_AssistedProp); eapply Amm_balance_ge_reserve_1_step; eassumption.
   destruct Hstep as [ENV [NextAddr [NexteAddr' Htransition]]].
   destruct Htransition
     as [ HAmmStep
-       | Hnac Horgc Hcallerc _ HTokenExtStep Haddr_const _ _ Hbalance_const _ _ Htk1_const
-       | Hnac Horgc Hcallerc _ HTokenExtStep Haddr_const _ _ Hbalance_const _ _ Htk0_const ].
+       | HstateConsistent HTokenExtStep Haddr_const _ _ Hbalance_const _ _ Htk1_const
+       | HstateConsistent HTokenExtStep Haddr_const _ _ Hbalance_const _ _ Htk0_const ].
   - destruct HAmmStep; simpl.
     + (* swap0 *)
       destruct H; simpl; auto.
@@ -926,7 +908,7 @@ Proof.
       rewrite balanceOf_sum_thm' with (x := Caller ENV) (f' := balanceOf STATE').
       * destruct H; simpl; rewrite Z.eqb_refl; lia.
       * destruct H; simpl; intros; rewrite_eqbs; reflexivity.
-      * destruct H; simpl; unfold MAX_ADDRESS; destruct H_conds; lia.
+      * destruct H; simpl; unfold MAX_ADDRESS; destruct H_conds, H_envNextAddrConsistent; lia.
     + (* transfer *)
       apply deltas with (x1 := balanceOf_sum STATE) (y1 := totalSupply STATE); [assumption|].
       unfold balanceOf_sum. simpl.
@@ -934,7 +916,7 @@ Proof.
       * destruct H; simpl; lia.
       * destruct H; simpl; intros; rewrite_eqbs; reflexivity.
       * destruct H; simpl; rewrite_eqbs; repeat rewrite Z.eqb_refl; lia.
-      * destruct H; simpl; unfold MAX_ADDRESS; destruct H_conds; lia.
+      * destruct H; simpl; unfold MAX_ADDRESS; destruct H_conds, H_envNextAddrConsistent; lia.
       * destruct H; simpl; unfold MAX_ADDRESS; destruct H_conds; lia.
     + (* transferFrom *)
       apply deltas with (x1 := balanceOf_sum STATE) (y1 := totalSupply STATE); [assumption|].
@@ -957,7 +939,8 @@ Proof.
   - destruct HTokenExtStep. unfold balanceOf_sum. rewrite <- H, <- Hbalance_const. assumption.
 Qed.
 
-Lemma Amm_liqs_sum_eq_total_reach : 
+Lemma Amm_liqs_sum_eq_total_reach :
+
   forall (ENV : Env) (t0 : Token.State) (t1 : Token.State) (liquidity : Z) (NextAddr : address) (STATE : State),
      reachableFromInit ENV t0 t1 liquidity NextAddr STATE
   -> Amm_liqs_sum_eq_total_AssistedProp ENV t0 t1 liquidity NextAddr STATE
@@ -1020,12 +1003,14 @@ balanceOf_sum' f N 0 = total
 -> (forall (m : nat), (m <= n)%nat -> f (Z.of_nat m) <= total).
 Proof.
   intros f total n N HtotalBalance HnLeN Hfnneg m HmLen .
-  assert (0 <= total) as HtotalNneg. { 
+  assert (0 <= total) as HtotalNneg. {
+
     rewrite <- HtotalBalance. apply sum_pos with (N := N); [assumption | lia].
   }
 
   assert (forall x acc, f (Z.of_nat (S x)) = balanceOf_sum' f (S x) acc - balanceOf_sum' f x acc). {
-    intros. simpl. rewrite balanceOf_sum_acc. lia. 
+    intros. simpl. rewrite balanceOf_sum_acc. lia.
+
   }
   assert (f 0 = balanceOf_sum' f 0 0). { simpl; lia. }
 
@@ -1056,10 +1041,10 @@ Proof.
   destruct H.
   simpl.
   destruct (x =? Caller ENV) eqn:Hcond1.
-  - destruct (x =? This ENV) eqn:Hcond2.
+  - destruct (x =? NextAddr) eqn:Hcond2.
     + lia.
     + destruct H_conds; lia.
-  - destruct (x =? This ENV) eqn:Hcond2; lia.
+  - destruct (x =? NextAddr) eqn:Hcond2; lia.
 Qed.
 
 Lemma Amm_balance_nneg_step : invariantStep Amm_balance_nneg_Prop.
@@ -1069,15 +1054,16 @@ Proof.
   destruct Hstep as [ENV [NextAddr [NextAddr' Htransition]]].
   destruct Htransition
     as [ HAmmStep
-       | _ _ Hcaller_cnstr _ HTokenTransition Haddr_const _ _ Hbalance_const _ _ Htk1_const
-       | _ _ Hcaller_cnstr _ HTokenTransition Haddr_const _ _ Hbalance_const _ _ Htk0_const].
+       | HstateConsistent HTokenTransition Haddr_const _ _ Hbalance_const _ _ Htk1_const
+       | HstateConsistent HTokenTransition Haddr_const _ _ Hbalance_const _ _ Htk0_const].
   - destruct HAmmStep; simpl; auto;
     destruct H; simpl; destruct H_conds; destruct_ifs; try apply Hyp; try lia.
   - destruct HTokenTransition. rewrite <- Hbalance_const. apply Hyp.
   - destruct HTokenTransition. rewrite <- Hbalance_const. apply Hyp.
 Qed.
 
-Lemma Amm_balance_nneg_reach : 
+Lemma Amm_balance_nneg_reach :
+
   forall (ENV : Env) (t0 : Token.State) (t1 : Token.State) (liquidity : Z) (NextAddr : address) (STATE : State),
      reachableFromInit ENV t0 t1 liquidity (NextAddr : address) (STATE : State)
   -> Amm_balance_nneg_Prop ENV t0 t1 liquidity NextAddr STATE
@@ -1109,15 +1095,16 @@ Proof.
   destruct Hstep as [ENV [NextAddr [NextAddr' Htransition]]].
   destruct Htransition
     as [ HAmmStep
-       | _ _ Hcaller_cnstr _ HTokenTransition Haddr_const _ _ Hbalance_const Hres0_const Hres1_const Htk1_const
-       | _ _ Hcaller_cnstr _ HTokenTransition Haddr_const _ _ Hbalance_const Hres0_const Hres1_const Htk0_const].
+       | HstateConsistent HTokenTransition Haddr_const _ _ Hbalance_const Hres0_const Hres1_const Htk1_const
+       | HstateConsistent HTokenTransition Haddr_const _ _ Hbalance_const Hres0_const Hres1_const Htk0_const].
   - destruct HAmmStep; simpl; auto;
     destruct H; destruct H_conds; simpl; lia.
   - destruct HTokenTransition. rewrite <- Hres0_const, <- Hres1_const. apply Hyp.
   - destruct HTokenTransition. rewrite <- Hres0_const, <- Hres1_const. apply Hyp.
 Qed.
 
-Lemma Amm_reserve_nneg_reach : 
+Lemma Amm_reserve_nneg_reach :
+
   forall (ENV : Env) (t0 : Token.State) (t1 : Token.State) (liquidity : Z) (NextAddr : address) (STATE : State),
      reachableFromInit ENV t0 t1 liquidity NextAddr (STATE : State)
   -> Amm_reserve_nneg_Prop ENV t0 t1 liquidity NextAddr STATE
@@ -1136,7 +1123,7 @@ Definition Amm_solvency_Prop (ENV : Env) (T0 T1 : Token.State) (L : Z) (STATE : 
   balanceOf STATE x * reserve0 STATE / totalSupply STATE <= Token.balanceOf (token0 STATE) (addr STATE) /\
   balanceOf STATE x * reserve1 STATE / totalSupply STATE <= Token.balanceOf (token1 STATE) (addr STATE).
 
-Lemma Amm_solvency_reach : 
+Lemma Amm_solvency_reach :
   forall (ENV : Env) (t0 : Token.State) (t1 : Token.State) (liquidity : Z) (NextAddr : address) (STATE : State),
      reachableFromInit ENV t0 t1 liquidity NextAddr STATE
      (*-> totalSupply STATE  > 0*)
@@ -1160,7 +1147,7 @@ Proof.
   assert (forall p, 0 <= p <= MAX_ADDRESS -> balanceOf STATE p <= totalSupply STATE) as HbalLeTotal. {
     intros.
     unfold Amm_liqs_sum_eq_total_Prop in HsumEq.
-    destruct HsumEq as [_ [_ [_ [ _ H']]]].
+    destruct HsumEq as [_ [_ [_ H']]].
     (*rewrite <- H'.*)
     remember (Z.to_nat p) as pn eqn:Heqpn.
     assert (p = Z.of_nat pn) as Heqp. { rewrite Heqpn. apply Z.eq_sym_iff. apply Z2Nat.id. lia. }
@@ -1183,7 +1170,7 @@ Proof.
       * apply Z.mul_le_mono_nonneg_r.
         -- assumption.
         -- apply HbalLeTotal. lia.
-    + rewrite Z.mul_comm, Z.div_mul. destruct HsumEq as [_ [_ [H' [_ _]]]].
+    + rewrite Z.mul_comm, Z.div_mul. destruct HsumEq as [_ [H' [_ _]]].
       apply H'.
       lia.
   - apply Z.le_trans with (m := totalSupply STATE * reserve1 STATE / totalSupply  STATE).
@@ -1192,7 +1179,7 @@ Proof.
       * apply Z.mul_le_mono_nonneg_r.
         -- assumption.
         -- apply HbalLeTotal. lia.
-    + rewrite Z.mul_comm, Z.div_mul. destruct HsumEq as [_ [_ [_ [H' _]]]].
+    + rewrite Z.mul_comm, Z.div_mul. destruct HsumEq as [_ [_ [H' _]]].
       apply H'.
       lia.
 Qed.
