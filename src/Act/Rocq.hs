@@ -267,7 +267,7 @@ behvPred store name cname i cases = inductive
           [ [("conds", (T.pack name) <> "_conds" <+> envVar <+> arguments i <+> stateVar <+> nextAddrVar) ]
           , [("case_cond", coqprop False c) ]
           , [("envNextAddrConsistent", envNextAddrCnstrType <+> envVar <+> nextAddrVar)]
-          , [("stateEnvConsistent", envNextAddrStateCnstrType <+> envVar <+> nextAddrVar <+> stateVar)]
+          , [("stateConsistent", envNextAddrStateCnstrType <+> envVar <+> nextAddrVar <+> stateVar)]
           , nameHypothesis ("bindings") bindingsHyp
           ]) <> ",\n"
           <> (T.pack name <> "_transition") 
@@ -325,10 +325,7 @@ extStep main store = inductive
       where
         varp = T.pack var
         body' = indent 2 . implication . concat $
-          [ [ nextAddrConstraintType <+> nextAddrVar <+> stateVar ]
-          , [ parens $ "forall (p : address)," <+> addressInType <+> stateVar <+> "p" <+> "->" <+> "Origin" <+> envVar <+> "<>" <+> "p" ]
-          , [ parens $ "forall (p : address)," <+> addressInType <+> stateVar <+> "p" <+> "->" <+> "Caller" <+> envVar <+> "<>" <+> "p" ]
-          , [ integerBoundsType <+> stateVar ]
+          [ [ envNextAddrStateCnstrType <+> envVar <+> nextAddrVar <+> stateVar ]
           , [ T.pack cid <.> extStepType <+> envVar <+> parens (varp <+> stateVar) <+> nextAddrVar <+> parens (varp <+> stateVar') <+> nextAddrVar' ]
           , [ addrField <+> stateVar <+> "=" <+> addrField <+> stateVar' ]
           , (\var' -> parens (T.pack var' <+> stateVar) <+> "=" <+> parens (T.pack var' <+> stateVar')) <$> (filter (var /=) $ M.keys localStore)
@@ -458,7 +455,8 @@ envNextAddrConstraints = inductive envNextAddrCnstrType (envDecl <+> nextAddrDec
   where
     body = indent 2 (
       (namedHyps . concat $
-      [ maybeToList (("CallerBound",) <$> coqbound ("Caller" <+> envVar) (ValueType TAddress))
+      [ maybeToList (("CallvalBound",) <$> coqbound ("Callvalue" <+> envVar) (ValueType (TInteger 256 Unsigned)))
+      , maybeToList (("CallerBound",) <$> coqbound ("Caller" <+> envVar) (ValueType TAddress))
       , maybeToList (("OriginBound",) <$> coqbound ("Origin" <+> envVar) (ValueType TAddress))
       , maybeToList (("NextAddressBound",) <$> coqbound ("NextAddr") (ValueType TAddress))
       , [("Caller_lt_NextAddr", "Caller" <+> envVar <+> "<" <+> nextAddrVar)]
@@ -1265,7 +1263,7 @@ envNextAddrCnstrType :: T.Text
 envNextAddrCnstrType = "envNextAddrConsistency"
 
 envNextAddrStateCnstrType :: T.Text
-envNextAddrStateCnstrType = "stateEnvConsistency"
+envNextAddrStateCnstrType = "stateConsistency"
 
 multistepType :: T.Text
 multistepType = "multistep"

@@ -17,7 +17,7 @@ Qed.
 
 Theorem mul_correct : forall na e s x y,
   envNextAddrConsistency e na ->
-  stateEnvConsistency e na s ->
+  stateConsistency e na s ->
   mul_conds e x y s na ->
   range256 x /\ range256 y /\ range256 (x * y) <-> mul_ret e x y s na (x * y).
 Proof.
