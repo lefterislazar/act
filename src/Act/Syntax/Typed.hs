@@ -94,8 +94,8 @@ deriving instance Eq (InvariantPred t)
 
 -- | Typed external interaction: a call to unknown code or a contract creation.
 data Interaction t
-  = TypedCallI   Pn Bool (Exp AContract t) Id [TypedExp t] (Maybe (Exp AInteger t)) (Maybe Interface)
-  | UntypedCallI   Pn Bool (Exp AInteger t) Id [TypedExp t] (Maybe (Exp AInteger t)) (Maybe Interface)
+  = TypedCallI   Pn Bool (Exp AContract t) Id [TypedExp t] (Maybe (Exp AInteger t)) Id (Maybe Interface)
+  | UntypedCallI   Pn Bool (Exp AInteger t) Id [TypedExp t] (Maybe (Exp AInteger t)) Id (Maybe Interface)
   | CreateI Pn Id   Id               [TypedExp t]    (Maybe (Exp AInteger t))
 deriving instance Show (Interaction t)
 deriving instance Eq   (Interaction t)
@@ -424,10 +424,10 @@ instance Timable (Ref k) where
 -- TODO: check why this is necessary
 instance Timable Interaction where
   setTime :: When -> Interaction Untimed -> Interaction Timed
-  setTime time (TypedCallI p s addr fn args mv iface) =
-    TypedCallI p s (setTime time addr) fn (setTime time <$> args) (setTime time <$> mv) iface
-  setTime time (UntypedCallI p s addr fn args mv iface) =
-    UntypedCallI p s (setTime time addr) fn (setTime time <$> args) (setTime time <$> mv) iface
+  setTime time (TypedCallI p s addr fn args mv success iface) =
+    TypedCallI p s (setTime time addr) fn (setTime time <$> args) (setTime time <$> mv) success iface
+  setTime time (UntypedCallI p s addr fn args mv success iface) =
+    UntypedCallI p s (setTime time addr) fn (setTime time <$> args) (setTime time <$> mv) success iface
   setTime time (CreateI p r c args mv) =
     CreateI p r c (setTime time <$> args) (setTime time <$> mv)
 
@@ -486,7 +486,7 @@ instance ToJSON (Effects t) where
            , "continuation" .= toJSON block ]
 
 instance ToJSON (Interaction t) where
-  toJSON (TypedCallI _ s addr fn args mv iface) =
+  toJSON (TypedCallI _ s addr fn args mv success iface) =
     object [ "kind" .= String "CallI"
            , "static" .= s
            , "address" .= toJSON addr
@@ -494,7 +494,7 @@ instance ToJSON (Interaction t) where
            , "args" .= toJSON args
            , "value" .= toJSON mv
            , "returns" .= toJSON iface ]
-  toJSON (UntypedCallI _ s addr fn args mv iface) =
+  toJSON (UntypedCallI _ s addr fn args mv success iface) =
     object [ "kind" .= String "CallI"
            , "static" .= s
            , "address" .= toJSON addr

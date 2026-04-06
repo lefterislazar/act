@@ -43,8 +43,8 @@ data Effects where
   LocalOnly           :: StorageUpdates -> (Maybe Expr) -> Effects
   deriving (Eq, Show)
 
-                         --statc addr fn  args   value        rets
-data Interaction = CallI Pn Bool Expr Id [Expr] (Maybe Expr) (Maybe Interface)
+                         --statc addr fn  args   value       successId rets
+data Interaction = CallI Pn Bool Expr Id [Expr] (Maybe Expr) Id        (Maybe Interface)
                  | CreateI Pn Id Id [Expr] (Maybe Expr)
   deriving (Eq, Show)                  
 
@@ -142,7 +142,7 @@ data EthEnv
 --   | Chainid
 --   | Gaslimit
 --   | Coinbase
---   | Timestamp
+  | Timestamp
 --   | Nonce
   deriving (Show, Eq)
 
@@ -152,6 +152,7 @@ ethEnv Callvalue = TInteger 256 Unsigned
 ethEnv Caller    = TAddress
 ethEnv This      = TAddress
 ethEnv Origin    = TAddress
+ethEnv Timestamp = TInteger 256 Unsigned
 
 instance ToJSON (TValueType a) where
   toJSON (TInteger n Signed)      = object [ "type" .= String "Int"

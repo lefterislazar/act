@@ -12,12 +12,14 @@ Record Env : Set :=
   { Callvalue : Z;
     Caller : address;
     This : address;
+    Timestamp : Z;
     Origin : address }.
 
 Definition CallEnv (value : Z) (caller : address) (ENV : Env) : Env :=
   {| Callvalue := value;
      Caller := caller;
      This := This ENV;
+     Timestamp := Timestamp ENV;
      Origin := Origin ENV |}.
 
 

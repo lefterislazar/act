@@ -184,7 +184,7 @@ checkContracts env ((U.Contract p cid decls cnstr behvs, source):cs) =
 
 -- | Derive storage typing from a list of storage variable declarations
 makeStorageTypingFromDecls :: Env -> [U.StorageVar] -> Err (Map Id (ValueType, Integer))
-makeStorageTypingFromDecls env decls = Map.fromList <$> go decls 0
+makeStorageTypingFromDecls env decls = Map.insert "BALANCE" (ValueType $ TInteger 256 Unsigned, -1) . Map.fromList <$> go decls 0
   where
     go :: [U.StorageVar] -> Integer -> Err [(Id,(ValueType, Integer))]
     go [] _ = pure []
@@ -294,7 +294,7 @@ checkConstrCases env cases = do
         (assert (p, "Identifier " <> show name <> "is reserved") (notElem name reservedIds)) *>
         noReserved rest
 
-    reservedIds = ["This", "Caller", "Origin", "Callvalue", "Env", "State", "addr"]
+    reservedIds = ["This", "Caller", "Origin", "Callvalue", "Timestamp", "Env", "State", "addr"]
 
     -- check that BALANCE is always declared with the right type
     balanceConsistent :: [U.Assign] -> Err ()
@@ -409,7 +409,7 @@ checkEffects env rettype (U.LocalAndInteraction updates interaction block') = do
           pure (LocalAndInteraction tupdates interaction' block'', concat cnstr1 ++ cnstr2 ++ cnstr3)
 
 checkInteraction :: Env -> U.Interaction -> Err (Interaction Untimed, [Constraint Untimed], Env)
-checkInteraction env (U.CallI p static calle fun args callvalue retVars) =
+checkInteraction env (U.CallI p static calle fun args callvalue success retVars) =
   inferExpr env U calle `bindValidation` \(TExp t calle', cnstr0) ->
     case t of
       TContract c -> do
@@ -431,11 +431,24 @@ checkInteraction env (U.CallI p static calle fun args callvalue retVars) =
                            callcnstr = CallCnstr p "" msg env args' cv c
                            msg = "Preconditions of transition call to " <> show c <> " are not guaranteed to hold"
                            -- env' = 
-                        in (TypedCallI p static calle' fun args' cv retVars, callcnstr : cnstr0 ++ cnstr1 ++ cnstr2 , env')
+                        in (TypedCallI p static calle' fun args' cv success retVars, callcnstr : cnstr0 ++ cnstr1 ++ cnstr2 , env')
               Nothing -> throw (p, "Contract " <> c <> "does not implement " <> fun)
           Nothing -> throw (p, "Unknown contract type: " <> c)
+      TAddress -> do
+        -- TODO: think about actual typechecking of arguments here..
+        cvc <- case callvalue of
+                Just cvExpr -> first Just <$> checkExpr env U (TInteger 256 Unsigned) cvExpr
+                Nothing     -> pure (Just $ LitInt nowhere 0, [])
+        argsc <- traverse (inferExpr env U) args
+        env' <- addRetdata retArgs env -- TODO: Maybe more specific contract type..
+        pure $ let (args', cnstr1) = unzip argsc
+                   (cv, cnstr2) = cvc
+                   -- callcnstr = CallCnstr p "" msg env args' cv c
+                   -- msg = "Preconditions of transition call to " <> show c <> " are not guaranteed to hold"
+                   -- env' = 
+                in (UntypedCallI p static calle' fun args' cv success retVars, cnstr0 ++ concat cnstr1 ++ cnstr2 , env')
       _ -> throw (p, "Call with non-callable type: " <> prettyTValueType t)
-  where retArgs = maybe [] (\(Interface _ decls) -> decls) retVars
+  where retArgs = (Arg (AbiArg AbiBoolType) success) : maybe [] (\(Interface _ decls) -> decls) retVars
 checkInteraction env@Env{constructors}  (U.CreateI p retVar c args callvalue) =
   case Map.lookup c constructors of
     Just cnstr -> do

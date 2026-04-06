@@ -51,8 +51,8 @@ locsFromBlock :: Typed.Block t -> [Typed.TypedRef t]
 locsFromBlock (Typed.Block iffs cases) = concatMap locsFromExp iffs ++ concatMap locsFromCase cases
 
 locsFromInteraction :: Typed.Interaction t -> [Typed.TypedRef t]
-locsFromInteraction (Typed.UntypedCallI _ _ addr _ args val _) = locsFromExp addr ++ concatMap locsFromTypedExp args ++ maybe [] locsFromExp val
-locsFromInteraction (Typed.TypedCallI _ _ addr _ args val _) = locsFromExp addr ++ concatMap locsFromTypedExp args ++ maybe [] locsFromExp val
+locsFromInteraction (Typed.UntypedCallI _ _ addr _ args val _ _) = locsFromExp addr ++ concatMap locsFromTypedExp args ++ maybe [] locsFromExp val
+locsFromInteraction (Typed.TypedCallI _ _ addr _ args val _ _) = locsFromExp addr ++ concatMap locsFromTypedExp args ++ maybe [] locsFromExp val
 locsFromInteraction (Typed.CreateI _ _ _ args val) = concatMap locsFromTypedExp args ++ maybe [] locsFromExp val
 
 locsFromConstructor :: Typed.Constructor t -> [Typed.TypedRef t]
@@ -269,8 +269,8 @@ createsFromBlock :: Typed.Block t -> [Id]
 createsFromBlock (Typed.Block iffs cases) = concatMap createsFromExp iffs ++ concatMap createsFromCase cases
 
 createsFromInteraction :: Typed.Interaction t -> [Id]
-createsFromInteraction (Typed.TypedCallI _ _ addr _ args val _) = createsFromExp addr ++ concatMap createsFromTypedExp args ++ maybe [] createsFromExp val
-createsFromInteraction (Typed.UntypedCallI _ _ addr _ args val _) = createsFromExp addr ++ concatMap createsFromTypedExp args ++ maybe [] createsFromExp val
+createsFromInteraction (Typed.TypedCallI _ _ addr _ args val _ _) = createsFromExp addr ++ concatMap createsFromTypedExp args ++ maybe [] createsFromExp val
+createsFromInteraction (Typed.UntypedCallI _ _ addr _ args val _ _) = createsFromExp addr ++ concatMap createsFromTypedExp args ++ maybe [] createsFromExp val
 createsFromInteraction (Typed.CreateI _ _ _ args val) = concatMap createsFromTypedExp args ++ maybe [] createsFromExp val
 
 
@@ -310,8 +310,8 @@ ethEnvFromBlock :: Typed.Block t -> [EthEnv]
 ethEnvFromBlock (Typed.Block iffs cases) = concatMap ethEnvFromExp iffs ++ concatMap ethEnvFromCase cases
 
 ethEnvFromInteraction :: Typed.Interaction t -> [EthEnv]
-ethEnvFromInteraction (Typed.TypedCallI _ _ addr _ args val _) = ethEnvFromExp addr ++ concatMap ethEnvFromTypedExp args ++ maybe [] ethEnvFromExp val
-ethEnvFromInteraction (Typed.UntypedCallI _ _ addr _ args val _) = ethEnvFromExp addr ++ concatMap ethEnvFromTypedExp args ++ maybe [] ethEnvFromExp val
+ethEnvFromInteraction (Typed.TypedCallI _ _ addr _ args val _ _) = ethEnvFromExp addr ++ concatMap ethEnvFromTypedExp args ++ maybe [] ethEnvFromExp val
+ethEnvFromInteraction (Typed.UntypedCallI _ _ addr _ args val _ _) = ethEnvFromExp addr ++ concatMap ethEnvFromTypedExp args ++ maybe [] ethEnvFromExp val
 ethEnvFromInteraction (Typed.CreateI _ _ _ args val) = concatMap ethEnvFromTypedExp args ++ maybe [] ethEnvFromExp val
 
 

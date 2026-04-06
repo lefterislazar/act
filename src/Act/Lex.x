@@ -62,7 +62,7 @@ tokens :-
   with                                  { mk WITH }
   value                                 { mk VALUE }
   payable                               { mk PAYABLE }
-  call                                  { mk CALL }
+  -- call                                  { mk CALL }
   static                                { mk STATIC }
   interaction                           { mk INTERACTION }
   -- builtin types

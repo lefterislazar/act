@@ -50,7 +50,7 @@ import Act.Error
   'with'                      { L WITH _ }
   'value'                     { L VALUE _ }
   'address(0)'                { L ADDR0 _ }
-  'call'                      { L CALL _ }
+  -- 'call'                      { L CALL _ }
   'static'                    { L STATIC _ }
   'interaction'               { L INTERACTION _ }
   -- builtin types
@@ -216,11 +216,11 @@ InteractionBlock : 'interaction' Interaction { $2 }
 
 -- TODO: change id.id to exp.id somehow
 Interaction : IsStatic Expr id MaybeSendValue '(' seplist(Expr, ',') ')'
-                                                      { CallI (posn $5) $1 $2 (name $3) $6 $4 Nothing }
+                                                      { CallI (posn $5) $1 $2 (name $3) $6 $4 "" Nothing }
 
-            | Interface '='
+            | '(' 'bool' id ',' Interface ')' '='
               IsStatic Expr id MaybeSendValue '(' seplist(Expr, ',') ')'
-                                                      { CallI (posn $7) $3 $4 (name $5) $8 $6 (Just $1) }
+                                                      { CallI (posn $12) $8 $9 (name $10) $13 $11 (name $3) (Just $5) }
 
             | 'creates' id '=' 'new' id MaybeSendValue '(' seplist(Expr, ',') ')'
                                                       { CreateI (posn $1) (name $2) (name $5) $8 $6 }
@@ -336,6 +336,7 @@ Expr : '(' Expr ')'                                   { $2 }
   | 'CALLVALUE'                                       { EnvExp (posn $1) Callvalue }
   | 'ORIGIN'                                          { EnvExp (posn $1) Origin }
   | 'THIS'                                            { EnvExp (posn $1) This }
+  | 'TIMESTAMP'                                       { EnvExp (posn $1) Timestamp }
   | 'address(0)'                                      { AddrOf (posn $1) (IntLit (posn $1) 0) }
 
 

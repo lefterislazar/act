@@ -91,6 +91,6 @@ instance Annotatable Typed.Effects where
 
 instance Annotatable Typed.Interaction where
   annotate :: Typed.Interaction Untimed -> Typed.Interaction Timed
-  annotate (TypedCallI pn static addr fn args val rets) = TypedCallI pn static (setPre addr) fn (setPre <$> args) (setPre <$> val) rets
-  annotate (UntypedCallI pn static addr fn args val rets) = UntypedCallI pn static (setPre addr) fn (setPre <$> args) (setPre <$> val) rets
+  annotate (TypedCallI pn static addr fn args val success rets) = TypedCallI pn static (setPre addr) fn (setPre <$> args) (setPre <$> val) success rets
+  annotate (UntypedCallI pn static addr fn args val success rets) = UntypedCallI pn static (setPre addr) fn (setPre <$> args) (setPre <$> val) success rets
   annotate (CreateI pn addrVar contract args val) = CreateI pn addrVar contract (setPre <$> args) (setPre <$> val)
